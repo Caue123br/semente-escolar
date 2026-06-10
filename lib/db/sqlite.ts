@@ -1,9 +1,16 @@
 import { createClient, type Client } from "@libsql/client";
 import path from "path";
 
-const DB_PATH =
-  process.env.SEMENTE_DB_PATH ??
-  path.join(process.cwd(), "data", "semente.db");
+// No Vercel, só /tmp é gravável. Em dev local, persiste em data/semente.db.
+function resolverDbPath(): string {
+  if (process.env.SEMENTE_DB_PATH) return process.env.SEMENTE_DB_PATH;
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return "/tmp/semente.db";
+  }
+  return path.join(process.cwd(), "data", "semente.db");
+}
+
+const DB_PATH = resolverDbPath();
 
 let _client: Client | null = null;
 let _inited = false;

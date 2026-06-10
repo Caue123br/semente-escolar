@@ -3,6 +3,9 @@ import { getDb, initDb } from "@/lib/db/sqlite";
 import { rowToEvento } from "@/lib/db/mappers";
 import type { EventoCalendario } from "@/lib/mock-data/calendario";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   await initDb();
   const r = await getDb().execute("SELECT * FROM eventos ORDER BY data ASC");

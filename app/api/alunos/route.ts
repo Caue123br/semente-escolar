@@ -3,6 +3,9 @@ import { getDb, initDb } from "@/lib/db/sqlite";
 import { rowToAluno } from "@/lib/db/mappers";
 import type { Aluno } from "@/lib/types";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   await initDb();
   const db = getDb();

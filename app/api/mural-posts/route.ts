@@ -3,6 +3,9 @@ import { getDb, initDb } from "@/lib/db/sqlite";
 import { rowToMuralPost } from "@/lib/db/mappers";
 import type { MuralPost } from "@/lib/data/store";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   await initDb();
   const r = await getDb().execute(
