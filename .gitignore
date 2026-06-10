@@ -1,0 +1,15 @@
+node_modules
+.next
+.env*
+!.env.example
+!.env.local.example
+.DS_Store
+*.log
+next-env.d.ts
+tsconfig.tsbuildinfo
+# Banco SQLite local
+data/
+*.db
+*.db-journal
+# Vercel
+.vercel
