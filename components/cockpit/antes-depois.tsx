@@ -52,7 +52,7 @@ export function AntesDepois() {
           </div>
           <h3 className="font-bold text-lg mt-0.5">Antes vs Agora</h3>
         </div>
-        <span className="text-xs text-muted-foreground">Escola Semente Feliz</span>
+        <span className="text-xs text-muted-foreground">Escola Modelo</span>
       </div>
 
       <div className="grid grid-cols-2 gap-3">

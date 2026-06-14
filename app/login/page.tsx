@@ -76,7 +76,7 @@ export default function LoginPage() {
             <div>
               <div className="font-semibold">Renata Andrade</div>
               <div className="text-sm text-emerald-200">
-                Diretora · Escola Semente Feliz · São Paulo
+                Diretora · Escola Modelo · São Paulo
               </div>
             </div>
           </div>

@@ -20,7 +20,7 @@ const STORAGE_KEY = "semente:welcome-seen";
 const passos = [
   {
     titulo: "Bem-vindo à demonstração ao vivo da Semente",
-    desc: "Você está navegando pelo sistema completo com dados fictícios da Escola Semente Feliz (228 alunos, R$ 257K/mês). Explore à vontade — nada aqui é real.",
+    desc: "Você está navegando pelo sistema completo com dados fictícios da Escola Modelo (228 alunos, R$ 257K/mês). Explore à vontade — nada aqui é real.",
     cta: "Vamos lá",
     icon: Sprout,
   },
