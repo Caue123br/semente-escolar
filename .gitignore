@@ -7,8 +7,8 @@ node_modules
 *.log
 next-env.d.ts
 tsconfig.tsbuildinfo
-# Banco SQLite local
-data/
+# Banco SQLite local (só na raiz — lib/data/ é código-fonte)
+/data/
 *.db
 *.db-journal
 # Vercel
