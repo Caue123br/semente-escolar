@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, X, AlertCircle, Upload } from "lucide-react";
+import { Check, AlertCircle, Upload, Banknote } from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -17,94 +17,124 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { formatBRL, formatDateBR } from "@/lib/utils";
-
-const lancamentos = [
-  { id: "l1", data: "2026-06-08", descricao: "PIX recebido — Mariana Almeida", valor: 2870, banco: "Sicredi", status: "Conciliado", origem: "Mensalidade Sofia" },
-  { id: "l2", data: "2026-06-08", descricao: "PIX recebido — Camila Pereira", valor: 2290, banco: "Sicredi", status: "Conciliado", origem: "Mensalidade Heitor" },
-  { id: "l3", data: "2026-06-07", descricao: "TED recebido — Patrícia Costa", valor: 2870, banco: "Itaú", status: "Conciliado", origem: "Mensalidade Manuela" },
-  { id: "l4", data: "2026-06-08", descricao: "PIX recebido — Origem desconhecida", valor: 150, banco: "Sicredi", status: "Pendente", origem: "—" },
-  { id: "l5", data: "2026-06-07", descricao: "Boleto liquidado — 89200012345", valor: 2870, banco: "Sicredi", status: "Conciliado", origem: "Mensalidade Helena" },
-  { id: "l6", data: "2026-06-06", descricao: "PIX recebido — R. T. Martins", valor: 245, banco: "Sicredi", status: "Divergência", origem: "Esperado: R$ 2.870" },
-];
+import { useEntidade } from "@/lib/data/store";
+import { usePeriodoContexto } from "@/lib/contexto-periodo";
 
 export function ConciliacaoTab() {
+  const { periodo } = usePeriodoContexto();
+  const { items: mensalidades } = useEntidade("mensalidades");
+  const { items: vendas } = useEntidade("vendas");
+
+  // Lançamentos = mensalidades pagas + vendas no mês
+  const mensPagas = mensalidades.filter(
+    (m) => m.competencia === periodo.competencia && m.status === "Paga"
+  );
+  const vendasMes = vendas.filter((v) => v.data >= periodo.inicio && v.data <= periodo.fim);
+
+  const lancamentos = [
+    ...mensPagas.map((m) => ({
+      id: m.id,
+      data: m.dataPagamento ?? m.vencimento,
+      descricao: `${m.formaPagamento ?? "Pagamento"} — ${m.alunoNome}`,
+      valor: m.valorPago ?? m.valor,
+      banco: m.formaPagamento === "Pix" ? "Pix" : m.formaPagamento === "Boleto" ? "Boleto" : "Conta",
+      origem: `Mensalidade ${m.competencia} · ${m.alunoNome}`,
+      status: "Conciliado" as const,
+    })),
+    ...vendasMes.map((v) => ({
+      id: v.id,
+      data: v.data,
+      descricao: `Venda · ${v.itemNome}`,
+      valor: v.total,
+      banco: v.formaPagamento === "Pix" ? "Pix" : v.formaPagamento === "Boleto" ? "Boleto" : "Conta",
+      origem: `Venda — ${v.cliente}`,
+      status: "Conciliado" as const,
+    })),
+  ].sort((a, b) => b.data.localeCompare(a.data));
+
+  const total = lancamentos.reduce((a, l) => a + l.valor, 0);
+  const totalPix = lancamentos.filter((l) => l.banco === "Pix").reduce((a, l) => a + l.valor, 0);
+
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card className="p-5">
-          <div className="text-xs uppercase text-muted-foreground">Conciliado</div>
-          <div className="mt-1 text-2xl font-bold text-success">87%</div>
-        </Card>
-        <Card className="p-5">
-          <div className="text-xs uppercase text-muted-foreground">Pendentes</div>
-          <div className="mt-1 text-2xl font-bold text-warning">5</div>
+          <div className="text-xs uppercase text-muted-foreground">Lançamentos no mês</div>
+          <div className="mt-1 text-2xl font-bold">{lancamentos.length}</div>
+          <div className="text-xs text-muted-foreground mt-1">{periodo.label}</div>
         </Card>
         <Card className="p-5">
-          <div className="text-xs uppercase text-muted-foreground">Divergências</div>
-          <div className="mt-1 text-2xl font-bold text-danger">2</div>
+          <div className="text-xs uppercase text-muted-foreground">Total conciliado</div>
+          <div className="mt-1 text-2xl font-bold text-success">{formatBRL(total)}</div>
         </Card>
-        <Card className="p-5 flex flex-col items-start justify-center">
-          <Button size="sm" className="w-full">
-            <Upload className="mr-2 h-4 w-4" /> Importar OFX
-          </Button>
+        <Card className="p-5">
+          <div className="text-xs uppercase text-muted-foreground">Recebido via Pix</div>
+          <div className="mt-1 text-2xl font-bold text-primary">{formatBRL(totalPix)}</div>
         </Card>
+      </div>
+
+      <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50 p-5">
+        <div className="flex items-start gap-3">
+          <Upload className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <div className="font-semibold text-sm text-amber-900">Importar OFX bancário — em breve</div>
+            <div className="text-xs text-amber-800 mt-1">
+              Por enquanto, considera-se que toda mensalidade marcada como paga e venda registrada
+              é uma entrada bancária conciliada. Pra conciliar com extrato real do banco, configure
+              integração com seu PSP / Open Finance.
+            </div>
+          </div>
+        </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Conciliação bancária</CardTitle>
-          <CardDescription>Lançamentos do extrato vs. sistema</CardDescription>
+          <CardTitle>Movimentação financeira de {periodo.label}</CardTitle>
+          <CardDescription>
+            Entradas reconhecidas pelo sistema (mensalidades pagas + vendas)
+          </CardDescription>
         </CardHeader>
-        <CardContent className="px-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Data</TableHead>
-                <TableHead>Descrição</TableHead>
-                <TableHead>Banco</TableHead>
-                <TableHead>Valor</TableHead>
-                <TableHead>Vínculo</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-24">Ação</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {lancamentos.map((l) => (
-                <TableRow key={l.id}>
-                  <TableCell>{formatDateBR(l.data)}</TableCell>
-                  <TableCell className="font-medium">{l.descricao}</TableCell>
-                  <TableCell className="text-muted-foreground">{l.banco}</TableCell>
-                  <TableCell className="font-semibold">{formatBRL(l.valor)}</TableCell>
-                  <TableCell className="text-sm">{l.origem}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        l.status === "Conciliado"
-                          ? "success"
-                          : l.status === "Divergência"
-                          ? "danger"
-                          : "warning"
-                      }
-                    >
-                      {l.status === "Conciliado" && <Check className="mr-1 h-3 w-3" />}
-                      {l.status === "Divergência" && <X className="mr-1 h-3 w-3" />}
-                      {l.status === "Pendente" && <AlertCircle className="mr-1 h-3 w-3" />}
-                      {l.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {l.status !== "Conciliado" && (
-                      <Button variant="outline" size="sm">
-                        Vincular
-                      </Button>
-                    )}
-                  </TableCell>
+        <CardContent className="px-0 overflow-x-auto">
+          {lancamentos.length === 0 ? (
+            <div className="text-sm text-muted-foreground text-center py-8">
+              Nenhuma movimentação registrada em {periodo.label}.
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead>Forma</TableHead>
+                  <TableHead>Valor</TableHead>
+                  <TableHead>Origem</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {lancamentos.slice(0, 30).map((l) => (
+                  <TableRow key={l.id}>
+                    <TableCell>{formatDateBR(l.data)}</TableCell>
+                    <TableCell className="font-medium">{l.descricao}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      <Badge variant="outline" className="text-[10px]">
+                        <Banknote className="mr-1 h-3 w-3" />
+                        {l.banco}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-semibold">{formatBRL(l.valor)}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{l.origem}</TableCell>
+                    <TableCell>
+                      <Badge variant="success" className="text-[10px]">
+                        <Check className="mr-1 h-3 w-3" /> Conciliado
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

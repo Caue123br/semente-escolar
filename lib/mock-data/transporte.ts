@@ -7,6 +7,7 @@ export interface RotaTransporte {
   placa: string;
   capacidade: number;
   alunosAtuais: number;
+  alunosIds?: string[];
   bairros: string[];
   horarioSaida: string;
   horarioRetorno: string;

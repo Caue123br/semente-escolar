@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { Baby, Moon, Droplet, Utensils, Sparkles, Plus, Clock } from "lucide-react";
 import {
   Card,
@@ -12,12 +13,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import {
-  registrosBercarioHoje,
-  rotinaBercario,
-  bebesBercario,
-  getBebe,
-} from "@/lib/mock-data/bercario";
+import { useEntidade } from "@/lib/data/store";
+import { NovoRegistroBercarioModal } from "@/components/shared/novo-registro-bercario-modal";
 import { initials, cn } from "@/lib/utils";
 
 const ICONE_TIPO: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -36,7 +33,26 @@ const COR_TIPO: Record<string, string> = {
   Observação: "bg-pink-100 text-pink-700",
 };
 
+const ROTINA_REFERENCIA = [
+  { horario: "07:00 - 08:00", atividade: "Acolhida e café da manhã", cor: "bg-amber-100 text-amber-700" },
+  { horario: "08:00 - 09:00", atividade: "Atividades sensoriais", cor: "bg-blue-100 text-blue-700" },
+  { horario: "09:00 - 09:30", atividade: "Lanche da manhã", cor: "bg-amber-100 text-amber-700" },
+  { horario: "09:30 - 10:30", atividade: "Soneca da manhã", cor: "bg-purple-100 text-purple-700" },
+  { horario: "10:30 - 11:30", atividade: "Música e movimento", cor: "bg-pink-100 text-pink-700" },
+  { horario: "11:30 - 12:30", atividade: "Almoço", cor: "bg-amber-100 text-amber-700" },
+  { horario: "12:30 - 14:00", atividade: "Banho e descanso", cor: "bg-cyan-100 text-cyan-700" },
+  { horario: "14:00 - 15:00", atividade: "Soneca da tarde", cor: "bg-purple-100 text-purple-700" },
+  { horario: "15:00 - 15:30", atividade: "Lanche da tarde", cor: "bg-amber-100 text-amber-700" },
+  { horario: "15:30 - 17:00", atividade: "Brincadeiras livres e parque", cor: "bg-emerald-100 text-emerald-700" },
+  { horario: "17:00 - 18:30", atividade: "Saída — entrega aos responsáveis", cor: "bg-slate-100 text-slate-700" },
+] as const;
+
 export default function BercarioPage() {
+  const { items: bebesBercario } = useEntidade("bercarioBebes");
+  const { items: registrosBercarioHoje } = useEntidade("bercarioRegistros");
+  const [modalAberto, setModalAberto] = React.useState(false);
+
+  const getBebe = (id: string) => bebesBercario.find((b) => b.id === id);
   const trocas = registrosBercarioHoje.filter((r) => r.tipo === "Troca").length;
   const soninhos = registrosBercarioHoje.filter((r) => r.tipo === "Sono").length;
   const refeicoes = registrosBercarioHoje.filter((r) => r.tipo === "Alimentação").length;
@@ -55,7 +71,7 @@ export default function BercarioPage() {
             Sono, troca, alimentação e observações em tempo real.
           </p>
         </div>
-        <Button>
+        <Button onClick={() => setModalAberto(true)}>
           <Plus className="mr-2 h-4 w-4" /> Novo registro
         </Button>
       </div>
@@ -188,11 +204,11 @@ export default function BercarioPage() {
         <TabsContent value="rotina">
           <Card>
             <CardHeader>
-              <CardTitle>Rotina diária do berçário</CardTitle>
-              <CardDescription>Cronograma padrão das atividades</CardDescription>
+              <CardTitle>Rotina diária de referência</CardTitle>
+              <CardDescription>Modelo visual fixo; ainda não é editável nem salvo no banco.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
-              {rotinaBercario.map((r, i) => (
+              {ROTINA_REFERENCIA.map((r, i) => (
                 <div key={i} className="flex items-center gap-4 rounded-lg border p-3">
                   <Badge variant="outline" className="font-mono text-xs">
                     {r.horario}
@@ -206,6 +222,12 @@ export default function BercarioPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <NovoRegistroBercarioModal
+        aberto={modalAberto}
+        onFechar={() => setModalAberto(false)}
+        bebes={bebesBercario}
+      />
     </div>
   );
 }

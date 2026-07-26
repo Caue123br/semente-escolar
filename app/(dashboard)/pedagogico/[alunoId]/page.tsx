@@ -1,18 +1,36 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
-import { ArrowLeft, GraduationCap, Calendar, AlertTriangle } from "lucide-react";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import {
+  ArrowLeft,
+  GraduationCap,
+  Calendar,
+  AlertTriangle,
+  Loader2,
+} from "lucide-react";
+
+import { LinhaEvolucao } from "@/components/pedagogico/linha-evolucao";
+import { NovaAvaliacaoModal } from "@/components/pedagogico/nova-avaliacao-modal";
+import { RadarCompetencias } from "@/components/pedagogico/radar-competencias";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { LinhaEvolucao } from "@/components/pedagogico/linha-evolucao";
-import { RadarCompetencias } from "@/components/pedagogico/radar-competencias";
-import { getAluno } from "@/lib/mock-data/alunos";
-import { getTurma } from "@/lib/mock-data/turmas";
-import { getPedagogicoAluno, alunosEstagnados } from "@/lib/mock-data/pedagogico";
-import { initials, formatDateBR } from "@/lib/utils";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
+import { useEntidade } from "@/lib/data/store";
+import {
+  avaliacoesDoAluno,
+  estaEstagnado,
+  ultimasDuasAvaliacoes,
+} from "@/lib/pedagogico";
+import { formatDateBR, initials } from "@/lib/utils";
 
 const CORES_NIVEL: Record<string, string> = {
   "Pré-silábico": "bg-orange-100 text-orange-700",
@@ -23,26 +41,72 @@ const CORES_NIVEL: Record<string, string> = {
 
 export default function AlunoPedagogicoPage() {
   const params = useParams<{ alunoId: string }>();
-  const aluno = getAluno(params.alunoId);
+  const [modalAberto, setModalAberto] = React.useState(false);
+  const {
+    items: alunos,
+    carregando: carregandoAlunos,
+    erro: erroAlunos,
+  } = useEntidade("alunos");
+  const {
+    items: turmas,
+    carregando: carregandoTurmas,
+    erro: erroTurmas,
+  } = useEntidade("turmas");
+  const {
+    items: avaliacoes,
+    add: salvarAvaliacao,
+    carregando: carregandoAvaliacoes,
+    erro: erroAvaliacoes,
+  } = useEntidade("avaliacoes");
+
+  const carregando = carregandoAlunos || carregandoTurmas || carregandoAvaliacoes;
+  const erros = [erroAlunos, erroTurmas, erroAvaliacoes].filter(Boolean);
+  const aluno = alunos.find((item) => item.id === params.alunoId);
+
+  if (carregando) {
+    return (
+      <div className="space-y-6">
+        <Link
+          href="/pedagogico"
+          className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="mr-1 h-4 w-4" /> Voltar para Pedagógico
+        </Link>
+        <Card className="flex items-center justify-center gap-2 p-12 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Carregando acompanhamento do aluno...
+        </Card>
+      </div>
+    );
+  }
+
   if (!aluno) return notFound();
 
-  const turma = getTurma(aluno.turmaId);
-  const ped = getPedagogicoAluno(aluno.id);
-  if (!turma || !ped) return notFound();
-
-  // O "atual" no protótipo é o 2º bimestre (junho/2026)
-  const ultima = ped.avaliacoes[1] ?? ped.avaliacoes[ped.avaliacoes.length - 1];
-  const penultima = ped.avaliacoes[0];
-  const isEstagnado = alunosEstagnados().some((e) => e.alunoId === aluno.id);
+  const turma = turmas.find((item) => item.id === aluno.turmaId);
+  const avaliacoesAluno = avaliacoesDoAluno(avaliacoes, aluno.id);
+  const registrosAluno = avaliacoes.filter(
+    (avaliacao) => avaliacao.alunoId === aluno.id
+  );
+  const { atual: ultima, anterior: penultima } =
+    ultimasDuasAvaliacoes(avaliacoesAluno);
+  const isEstagnado = Boolean(
+    ultima && penultima && estaEstagnado(ultima, penultima)
+  );
+  const corTurma = turma?.cor ?? "#64748b";
 
   return (
     <div className="space-y-6">
       <Link
         href="/pedagogico"
-        className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+        className="inline-flex items-center text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="mr-1 h-4 w-4" /> Voltar para Pedagógico
       </Link>
+
+      {erros.length > 0 && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          Não foi possível carregar todos os dados: {erros.join(" · ")}
+        </div>
+      )}
 
       <Card>
         <CardContent className="pt-6">
@@ -50,7 +114,7 @@ export default function AlunoPedagogicoPage() {
             <Avatar className="h-20 w-20">
               <AvatarFallback
                 className="text-xl font-bold"
-                style={{ backgroundColor: turma.cor + "30", color: turma.cor }}
+                style={{ backgroundColor: `${corTurma}30`, color: corTurma }}
               >
                 {initials(aluno.nome)}
               </AvatarFallback>
@@ -58,9 +122,13 @@ export default function AlunoPedagogicoPage() {
             <div className="flex-1">
               <h1 className="text-2xl font-bold tracking-tight">{aluno.nome}</h1>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                <span>{turma.nome}</span>
-                <span>•</span>
-                <span>{turma.professorNome}</span>
+                <span>{turma?.nome ?? "Turma não encontrada"}</span>
+                {turma?.professorNome && (
+                  <>
+                    <span>•</span>
+                    <span>{turma.professorNome}</span>
+                  </>
+                )}
                 <span>•</span>
                 <span>Matrícula {aluno.matricula}</span>
                 {aluno.bilingue && (
@@ -84,91 +152,128 @@ export default function AlunoPedagogicoPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="p-4">
-          <div className="text-xs uppercase text-muted-foreground">Leitura (atual)</div>
-          <Badge className={`${CORES_NIVEL[ultima.leituraNivel]} border-transparent mt-2`}>
-            <GraduationCap className="mr-1 h-3 w-3" />
-            {ultima.leituraNivel}
-          </Badge>
+      {!ultima ? (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <GraduationCap className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="font-semibold">Nenhuma avaliação registrada</div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Lance o primeiro bimestre para iniciar a linha de evolução de {aluno.nome}.
+              </p>
+            </div>
+            <Button onClick={() => setModalAberto(true)}>Lançar primeira avaliação</Button>
+          </CardContent>
         </Card>
-        <Card className="p-4">
-          <div className="text-xs uppercase text-muted-foreground">Escrita</div>
-          <div className="mt-1 text-2xl font-bold">{ultima.escrita}/4</div>
-        </Card>
-        <Card className="p-4">
-          <div className="text-xs uppercase text-muted-foreground">Lógica-Matemática</div>
-          <div className="mt-1 text-2xl font-bold">{ultima.logicaMatematica}/4</div>
-        </Card>
-        <Card className="p-4">
-          <div className="text-xs uppercase text-muted-foreground">Oralidade</div>
-          <div className="mt-1 text-2xl font-bold">{ultima.oralidade}/4</div>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <LinhaEvolucao avaliacoes={ped.avaliacoes} nome={aluno.nome.split(" ")[0]} />
-        <RadarCompetencias
-          bimestre={ultima}
-          bimestreAnterior={penultima}
-          nome={aluno.nome.split(" ")[0]}
-        />
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-4 w-4" />
-            Histórico bimestral
-          </CardTitle>
-          <CardDescription>Detalhes de todas as avaliações de {ped.avaliacoes[0].ano}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {ped.avaliacoes.map((av) => (
-              <div key={av.bimestre} className="rounded-lg border p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="font-semibold">
-                    {av.bimestre}º bimestre de {av.ano}
-                  </div>
-                  <Badge className={`${CORES_NIVEL[av.leituraNivel]} border-transparent`}>
-                    {av.leituraNivel}
-                  </Badge>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                  <div>
-                    <div className="text-xs text-muted-foreground">Leitura</div>
-                    <div className="font-semibold">{av.leitura}/4</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground">Escrita</div>
-                    <div className="font-semibold">{av.escrita}/4</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground">Lógica</div>
-                    <div className="font-semibold">{av.logicaMatematica}/4</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground">Oralidade</div>
-                    <div className="font-semibold">{av.oralidade}/4</div>
-                  </div>
-                </div>
-                {av.observacao && (
-                  <div className="mt-3 pt-3 border-t text-sm text-muted-foreground italic">
-                    "{av.observacao}"
-                  </div>
-                )}
-              </div>
-            ))}
+      ) : (
+        <>
+          <div className="grid gap-4 md:grid-cols-4">
+            <Card className="p-4">
+              <div className="text-xs uppercase text-muted-foreground">Leitura (atual)</div>
+              <Badge className={`${CORES_NIVEL[ultima.leituraNivel]} mt-2 border-transparent`}>
+                <GraduationCap className="mr-1 h-3 w-3" />
+                {ultima.leituraNivel}
+              </Badge>
+            </Card>
+            <Card className="p-4">
+              <div className="text-xs uppercase text-muted-foreground">Escrita</div>
+              <div className="mt-1 text-2xl font-bold">{ultima.escrita}/4</div>
+            </Card>
+            <Card className="p-4">
+              <div className="text-xs uppercase text-muted-foreground">Lógica-Matemática</div>
+              <div className="mt-1 text-2xl font-bold">{ultima.logicaMatematica}/4</div>
+            </Card>
+            <Card className="p-4">
+              <div className="text-xs uppercase text-muted-foreground">Oralidade</div>
+              <div className="mt-1 text-2xl font-bold">{ultima.oralidade}/4</div>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            <LinhaEvolucao avaliacoes={avaliacoesAluno} nome={aluno.nome.split(" ")[0]} />
+            <RadarCompetencias
+              bimestre={ultima}
+              bimestreAnterior={penultima}
+              nome={aluno.nome.split(" ")[0]}
+            />
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                Histórico bimestral
+              </CardTitle>
+              <CardDescription>
+                Todas as avaliações persistidas para este aluno
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {[...avaliacoesAluno].reverse().map((avaliacao) => (
+                  <div
+                    key={`${avaliacao.ano}-${avaliacao.bimestre}`}
+                    className="rounded-lg border p-4"
+                  >
+                    <div className="mb-3 flex items-center justify-between">
+                      <div className="font-semibold">
+                        {avaliacao.bimestre}º bimestre de {avaliacao.ano}
+                      </div>
+                      <Badge
+                        className={`${CORES_NIVEL[avaliacao.leituraNivel]} border-transparent`}
+                      >
+                        {avaliacao.leituraNivel}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+                      <div>
+                        <div className="text-xs text-muted-foreground">Leitura</div>
+                        <div className="font-semibold">{avaliacao.leitura}/4</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground">Escrita</div>
+                        <div className="font-semibold">{avaliacao.escrita}/4</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground">Lógica</div>
+                        <div className="font-semibold">{avaliacao.logicaMatematica}/4</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground">Oralidade</div>
+                        <div className="font-semibold">{avaliacao.oralidade}/4</div>
+                      </div>
+                    </div>
+                    {avaliacao.observacao && (
+                      <div className="mt-3 border-t pt-3 text-sm italic text-muted-foreground">
+                        “{avaliacao.observacao}”
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
 
       <div className="flex flex-wrap gap-2">
-        <Button>Lançar nova avaliação</Button>
-        <Button variant="outline">Imprimir boletim</Button>
-        <Button variant="outline">Compartilhar com responsáveis</Button>
+        {ultima && (
+          <Button onClick={() => setModalAberto(true)}>Lançar nova avaliação</Button>
+        )}
+        <Link href={`/boletim/${aluno.id}`} target="_blank">
+          <Button variant="outline">Imprimir boletim PDF</Button>
+        </Link>
       </div>
+
+      <NovaAvaliacaoModal
+        aberto={modalAberto}
+        aluno={aluno}
+        avaliacoes={registrosAluno}
+        onClose={() => setModalAberto(false)}
+        onSalvar={salvarAvaliacao}
+      />
     </div>
   );
 }

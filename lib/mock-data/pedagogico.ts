@@ -18,32 +18,22 @@ const NIVEIS_PSICO: NivelPsicogenese[] = [
   "Alfabético",
 ];
 
-// Nível inicial esperado no início do ano por série (realista BR)
+// Nível inicial esperado no início do ano por série (escola de educação infantil)
 const NIVEL_INICIAL_POR_SERIE: Record<SerieEnum, number> = {
-  Berçário: 0,
-  "Maternal I": 0,
-  "Maternal II": 0,
-  "Jardim I": 0,
-  "Jardim II": 1,
-  "1º Ano": 1,
-  "2º Ano": 2,
-  "3º Ano": 3,
-  "4º Ano": 3,
-  "5º Ano": 3,
+  "Mini Maternal": 0,
+  Maternal: 0,
+  "Maternal 1": 0,
+  Jardim: 1,
+  Pré: 2,
 };
 
 // Velocidade de evolução por série (0=devagar, 1=normal, 2=rápida)
 const VELOCIDADE_POR_SERIE: Record<SerieEnum, number> = {
-  Berçário: 0,
-  "Maternal I": 0,
-  "Maternal II": 0,
-  "Jardim I": 1,
-  "Jardim II": 1,
-  "1º Ano": 2,
-  "2º Ano": 1,
-  "3º Ano": 1,
-  "4º Ano": 0,
-  "5º Ano": 0,
+  "Mini Maternal": 0,
+  Maternal: 0,
+  "Maternal 1": 1,
+  Jardim: 1,
+  Pré: 2,
 };
 
 // IDs de alunos estagnados (para gerar alerta)
@@ -95,7 +85,7 @@ function gerarAvaliacoesMock(alunoId: string, idx: number, ano = 2026): Avaliaca
         bim === 2
           ? stuck
             ? "Aluno apresentou estagnação no bimestre. Necessita acompanhamento individual e reunião com a família."
-            : turma.serie === "Berçário" || turma.serie === "Maternal I"
+            : turma.serie === "Mini Maternal" || turma.serie === "Maternal"
             ? "Desenvolvimento dentro do esperado para a faixa etária."
             : "Bom desempenho. Continua avançando nas competências."
           : undefined,

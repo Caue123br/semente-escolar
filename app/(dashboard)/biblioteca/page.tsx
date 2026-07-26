@@ -21,11 +21,15 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table";
-import { livros, emprestimosAtivos } from "@/lib/mock-data/biblioteca";
+import { useEntidade } from "@/lib/data/store";
+import { NovoLivroModal } from "@/components/shared/novo-livro-modal";
 import { formatDateBR, diffDays } from "@/lib/utils";
 
 export default function BibliotecaPage() {
+  const { items: livros } = useEntidade("bibliotecaLivros");
+  const { items: emprestimosAtivos } = useEntidade("bibliotecaEmprestimos");
   const [busca, setBusca] = React.useState("");
+  const [modalAberto, setModalAberto] = React.useState(false);
   const filtrados = livros.filter((l) =>
     busca
       ? l.titulo.toLowerCase().includes(busca.toLowerCase()) ||
@@ -51,7 +55,7 @@ export default function BibliotecaPage() {
             Acervo, empréstimos e devoluções.
           </p>
         </div>
-        <Button>
+        <Button onClick={() => setModalAberto(true)}>
           <Plus className="mr-2 h-4 w-4" /> Cadastrar livro
         </Button>
       </div>
@@ -225,6 +229,8 @@ export default function BibliotecaPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <NovoLivroModal aberto={modalAberto} onFechar={() => setModalAberto(false)} />
     </div>
   );
 }

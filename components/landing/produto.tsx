@@ -15,12 +15,12 @@ const screenshots = [
     id: "financeiro",
     icon: Banknote,
     titulo: "Régua de inadimplência",
-    desc: "Veja quem deve, quantos dias, e cobre via WhatsApp num clique. Renegocie com a proposta sendo gerada na hora.",
+    desc: "Veja quem deve, há quantos dias, e abra uma mensagem no WhatsApp para concluir o contato.",
     bullets: [
-      "Disparo automático D+3, D+7, D+15",
-      "Templates aprovados pelo WhatsApp",
-      "Pix QR gerado por cobrança",
-      "Renegociação com parcelas e desconto",
+      "Faixas D+3, D+7 e D+15 na régua",
+      "Mensagem revisável antes do envio",
+      "Abertura do WhatsApp pelo usuário",
+      "Histórico interno de contato",
     ],
     visual: (
       <div className="rounded-xl border bg-card shadow-xl p-4 space-y-2">
@@ -61,7 +61,7 @@ const screenshots = [
       "Escala de psicogênese da escrita",
       "Linha de evolução por bimestre",
       "Radar comparativo de competências",
-      "Alerta automático de estagnação",
+      "Comparação da evolução por período",
     ],
     visual: (
       <div className="rounded-xl border bg-card shadow-xl p-5">
@@ -117,13 +117,13 @@ const screenshots = [
   {
     id: "whatsapp",
     icon: MessageCircle,
-    titulo: "WhatsApp integrado de verdade",
-    desc: "12 grupos de turma sincronizados, campanhas em massa e cobrança automática conectada à régua.",
+    titulo: "Rascunhos para WhatsApp",
+    desc: "Prepare mensagens no sistema e conclua o envio no WhatsApp, sem alegar entrega automática.",
     bullets: [
-      "1 grupo por turma — todos sincronizados",
-      "Campanhas em massa segmentadas",
-      "Templates aprovados pelo WhatsApp",
-      "Read receipts e taxa de entrega",
+      "Rascunhos separados por contexto",
+      "Texto revisável antes do contato",
+      "Abertura externa para envio",
+      "Sem confirmação fictícia de leitura",
     ],
     visual: (
       <div className="rounded-xl border bg-gradient-to-br from-emerald-50 to-white shadow-xl p-5 space-y-2">
@@ -142,7 +142,7 @@ const screenshots = [
             </div>
             <div className="text-xs text-muted-foreground line-clamp-1">{m.texto}</div>
             <div className="text-xs mt-1 text-emerald-600 font-semibold">
-              {m.lida ? "✓✓ Lida" : "✓ Entregue"}
+              {m.lida ? "Rascunho revisado" : "Pendente de envio"}
             </div>
           </div>
         ))}
@@ -153,12 +153,12 @@ const screenshots = [
     id: "crm",
     icon: Target,
     titulo: "Captação que vira matrícula",
-    desc: "Funil de 7 estágios, origem dos leads, e conversão acompanhada — sua escola enche sozinha.",
+    desc: "Funil de 7 estágios, origem dos leads e conversão acompanhada em um só lugar.",
     bullets: [
       "Funil Kanban com 7 estágios",
       "Origem (Instagram, indicação, etc)",
       "Pipeline de R$ potencial em tempo real",
-      "Follow-up automático",
+      "Próxima ação registrada",
     ],
     visual: (
       <div className="rounded-xl border bg-card shadow-xl p-4">

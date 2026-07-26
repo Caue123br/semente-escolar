@@ -9,10 +9,10 @@ const personas = [
     titulo: "Para você que é dona da escola",
     desc: "Quer profissionalizar a gestão sem virar refém de planilha e WhatsApp.",
     items: [
-      "Cockpit com a saúde do negócio em 10 segundos",
-      "Inadimplência sob controle pela primeira vez",
-      "Decisões baseadas em dados, não em achismo",
-      "Sua escola continua girando quando você não está",
+      "Cockpit com indicadores consolidados",
+      "Inadimplência calculada pelos lançamentos",
+      "Decisões apoiadas pelos dados cadastrados",
+      "Módulos administrativos no mesmo sistema",
     ],
   },
   {
@@ -22,9 +22,9 @@ const personas = [
     desc: "Quer visibilidade do pedagógico sem precisar abrir 10 abas e ligar pra 4 professoras.",
     items: [
       "Evolução de cada aluno em gráfico visual",
-      "Alerta automático de estagnação",
+      "Comparação da evolução por período",
       "Visão consolidada por turma e série",
-      "Boletins prontos em 1 clique",
+      "Boletins consultáveis por aluno",
     ],
   },
   {
@@ -36,7 +36,7 @@ const personas = [
       "Avaliação bimestral em 5 minutos",
       "Kanban da turma sempre à mão",
       "Chamada digital com 1 toque",
-      "Comunicação com pais centralizada",
+      "Recados internos por turma",
     ],
   },
   {
@@ -45,10 +45,10 @@ const personas = [
     titulo: "Para os pais e responsáveis",
     desc: "Querem acompanhar o filho sem terem que ir até a escola.",
     items: [
-      "App próprio para os pais (incluso)",
-      "Boletim, agenda e fotos em tempo real",
-      "Chat direto com a professora",
-      "Mensalidade no Pix com 1 clique",
+      "Portal web para responsáveis",
+      "Boletim, ficha e extrato quando publicados",
+      "Acesso por sessão protegida",
+      "Dados vinculados ao aluno autorizado",
     ],
   },
 ];

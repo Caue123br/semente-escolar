@@ -4,7 +4,6 @@ import Link from "next/link";
 import {
   Sparkles,
   ArrowRight,
-  PlayCircle,
   Check,
   TrendingUp,
   Users,
@@ -69,14 +68,13 @@ export function LandingHero() {
               asChild
               className="h-12 px-6 text-base bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 shadow-lg shadow-emerald-600/30 hover:shadow-emerald-600/50 transition-all"
             >
-              <Link href="/cockpit">
-                Ver demonstração ao vivo
+              <Link href="#agendar-demonstracao">
+                Solicitar demonstração
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
-            <Button size="lg" variant="outline" className="h-12 px-6 text-base">
-              <PlayCircle className="mr-2 h-4 w-4" />
-              Assistir vídeo de 2 min
+            <Button size="lg" variant="outline" className="h-12 px-6 text-base" asChild>
+              <Link href="#modulos">Conhecer os módulos</Link>
             </Button>
           </div>
 
@@ -84,24 +82,25 @@ export function LandingHero() {
           <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1.5">
               <Check className="h-3.5 w-3.5 text-emerald-600" />
-              14 dias grátis
+              Solicitação registrada
             </span>
             <span className="inline-flex items-center gap-1.5">
               <Check className="h-3.5 w-3.5 text-emerald-600" />
-              Sem cartão de crédito
+              Agenda sob confirmação
             </span>
             <span className="inline-flex items-center gap-1.5">
               <Check className="h-3.5 w-3.5 text-emerald-600" />
-              Implantação em 1 dia
+              Dados em PostgreSQL
             </span>
             <span className="inline-flex items-center gap-1.5">
               <Check className="h-3.5 w-3.5 text-emerald-600" />
-              LGPD by design
+              Permissões por perfil
             </span>
           </div>
 
           {/* Hero Mockup */}
           <div className="mt-16 w-full max-w-6xl">
+            <p className="mb-3 text-xs text-muted-foreground">Prévia visual ilustrativa; os valores abaixo são exemplos.</p>
             <HeroMockup />
           </div>
         </div>

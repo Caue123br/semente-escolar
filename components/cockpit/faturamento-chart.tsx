@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -7,20 +8,14 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  Legend,
   Bar,
   Line,
 } from "recharts";
+import { AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { faturamentoHistorico } from "@/lib/mock-data/financeiro";
 import { formatBRL } from "@/lib/utils";
-
-const data = faturamentoHistorico.map((f) => ({
-  mes: `${f.mes}/${f.ano.toString().slice(-2)}`,
-  Faturado: f.faturado,
-  Recebido: f.recebido,
-  Inadimplência: f.inadimplencia,
-}));
+import { useEntidade } from "@/lib/data/store";
+import { MESES_PT_ABREV } from "@/components/shared/seletor-mes";
 
 interface TooltipPayloadEntry {
   name: string;
@@ -58,17 +53,88 @@ function CustomTooltip({
 }
 
 export function FaturamentoChart() {
+  const {
+    items: mensalidades,
+    carregando: carregandoMensalidades,
+    erro: erroMensalidades,
+    reset: recarregarMensalidades,
+  } = useEntidade("mensalidades");
+  const {
+    items: vendas,
+    carregando: carregandoVendas,
+    erro: erroVendas,
+    reset: recarregarVendas,
+  } = useEntidade("vendas");
+
+  // 12 meses até o atual
+  const data = React.useMemo(() => {
+    const hoje = new Date();
+    const lista: Array<{ mes: string; Faturado: number; Recebido: number; Inadimplência: number }> = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+      const ano = d.getFullYear();
+      const m = d.getMonth();
+      const mm = String(m + 1).padStart(2, "0");
+      const comp = `${ano}-${mm}`;
+      const inicioMes = `${ano}-${mm}-01`;
+      const ultDia = new Date(ano, m + 1, 0).getDate();
+      const fimMes = `${ano}-${mm}-${String(ultDia).padStart(2, "0")}`;
+
+      const doMes = mensalidades.filter((mn) => mn.competencia === comp);
+      const faturado = doMes.reduce((a, mn) => a + mn.valor, 0)
+        + vendas.filter((v) => v.data >= inicioMes && v.data <= fimMes).reduce((a, v) => a + v.total, 0);
+      const recebido = doMes.filter((mn) => mn.status === "Paga").reduce((a, mn) => a + (mn.valorPago ?? mn.valor), 0)
+        + vendas.filter((v) => v.data >= inicioMes && v.data <= fimMes).reduce((a, v) => a + v.total, 0);
+      const inad = doMes.filter((mn) => mn.status === "Atrasada").reduce((a, mn) => a + mn.valor, 0);
+
+      lista.push({
+        mes: `${MESES_PT_ABREV[m]}/${String(ano).slice(2)}`,
+        Faturado: faturado,
+        Recebido: recebido,
+        Inadimplência: inad,
+      });
+    }
+    return lista;
+  }, [mensalidades, vendas]);
+
+  if (carregandoMensalidades || carregandoVendas) {
+    return (
+      <Card className="flex min-h-[420px] items-center justify-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Carregando faturamento...
+      </Card>
+    );
+  }
+
+  if (erroMensalidades || erroVendas) {
+    return (
+      <Card className="flex min-h-[420px] flex-col items-center justify-center gap-2 p-8 text-center text-sm text-muted-foreground">
+        <AlertCircle className="h-8 w-8 text-warning" />
+        <span>O gráfico financeiro está temporariamente indisponível.</span>
+        <button
+          type="button"
+          onClick={() => {
+            recarregarMensalidades();
+            recarregarVendas();
+          }}
+          className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+        >
+          <RefreshCw className="h-3.5 w-3.5" /> Tentar novamente
+        </button>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between flex-wrap gap-2">
           <div>
             <CardTitle>Faturamento — últimos 12 meses</CardTitle>
             <CardDescription>
-              Valor faturado vs. recebido vs. inadimplência mensal
+              Valor faturado vs. recebido vs. inadimplência mensal · calculado em tempo real
             </CardDescription>
           </div>
-          <div className="flex items-center gap-3 text-xs">
+          <div className="flex items-center gap-3 text-xs flex-wrap">
             <div className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-sm bg-primary" /> Faturado
             </div>
@@ -94,12 +160,12 @@ export function FaturamentoChart() {
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
               <XAxis
                 dataKey="mes"
-                tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
                 axisLine={{ stroke: "hsl(var(--border))" }}
                 tickLine={false}
               />
               <YAxis
-                tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(v: number) => `R$ ${(v / 1000).toFixed(0)}k`}

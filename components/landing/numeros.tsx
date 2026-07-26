@@ -9,10 +9,10 @@ interface Stat {
 }
 
 const stats: Stat[] = [
-  { valor: "+200", label: "escolas usando", destaque: "↑ 38% no ano" },
-  { valor: "R$ 4M+", label: "em mensalidades gerenciadas/mês" },
-  { valor: "98%", label: "taxa de retenção dos clientes" },
-  { valor: "−42%", label: "média de inadimplência após 3 meses" },
+  { valor: "PostgreSQL", label: "persistência centralizada no servidor" },
+  { valor: "4 perfis", label: "direção, coordenação, professor e financeiro" },
+  { valor: "CSV + JSON", label: "relatórios e exportação operacional" },
+  { valor: "PT-BR", label: "interface preparada para a rotina escolar" },
 ];
 
 export function LandingNumeros() {
@@ -30,10 +30,10 @@ export function LandingNumeros() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative">
         <div className="text-center max-w-3xl mx-auto mb-12">
           <div className="text-xs font-bold uppercase tracking-wider text-emerald-300">
-            Resultados que falam por si
+            O que esta instalação entrega
           </div>
           <h2 className="mt-3 text-3xl md:text-5xl font-bold tracking-tight">
-            Escolas que mudaram de patamar
+            Uma base operacional clara e verificável
           </h2>
         </div>
 

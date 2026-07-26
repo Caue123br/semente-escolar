@@ -4,7 +4,6 @@ import * as React from "react";
 import {
   Trello,
   Plus,
-  MoreVertical,
   Calendar,
   AlertCircle,
   GraduationCap,
@@ -25,11 +24,11 @@ import {
   SelectItem,
   SelectValue,
 } from "@/components/ui/select";
-import { colunasKanbanPadrao, cardsKanban } from "@/lib/mock-data/kanban";
-import { turmas, turmasDoProfessor } from "@/lib/mock-data/turmas";
-import { usePerfil } from "@/lib/perfil-context";
+import { colunasKanbanPadrao } from "@/lib/mock-data/kanban";
+import { useEntidade } from "@/lib/data/store";
+import { useToast } from "@/lib/toast";
+import { NovoCardKanbanModal } from "@/components/shared/novo-card-kanban-modal";
 import { cn, formatDateBR } from "@/lib/utils";
-import type { KanbanCard } from "@/lib/types";
 
 const TIPO_ICONE: Record<string, React.ComponentType<{ className?: string }>> = {
   Atividade: GraduationCap,
@@ -46,20 +45,27 @@ const TIPO_COR: Record<string, string> = {
 };
 
 export default function KanbanPage() {
-  const { perfil } = usePerfil();
-  const turmasComCards = turmas.filter((t) => cardsKanban.some((c) => c.turmaId === t.id));
-  const turmasDisponiveis =
-    perfil === "professor"
-      ? turmasComCards.filter((t) => turmasDoProfessor.includes(t.id))
-      : turmasComCards;
+  const toast = useToast();
+  const { items: cards, update } = useEntidade("kanban");
+  const { items: turmas } = useEntidade("turmas");
+  const turmasDisponiveis = turmas;
 
-  const [turmaSelecionada, setTurmaSelecionada] = React.useState(
-    turmasDisponiveis[0]?.id ?? "t5"
-  );
-  const [cards, setCards] = React.useState<KanbanCard[]>(cardsKanban);
+  const [turmaSelecionada, setTurmaSelecionada] = React.useState<string>("");
   const [arrastando, setArrastando] = React.useState<string | null>(null);
+  const [modalAberto, setModalAberto] = React.useState(false);
+  const [colunaParaNovo, setColunaParaNovo] = React.useState("c-todo");
 
-  const turmaAtual = turmas.find((t) => t.id === turmaSelecionada);
+  React.useEffect(() => {
+    if (turmasDisponiveis.length === 0 && turmaSelecionada) setTurmaSelecionada("");
+    else if (
+      turmasDisponiveis.length > 0 &&
+      !turmasDisponiveis.some((turma) => turma.id === turmaSelecionada)
+    ) {
+      setTurmaSelecionada(turmasDisponiveis[0].id);
+    }
+  }, [turmasDisponiveis, turmaSelecionada]);
+
+  const turmaAtual = turmasDisponiveis.find((t) => t.id === turmaSelecionada);
   const cardsDaTurma = cards.filter((c) => c.turmaId === turmaSelecionada);
 
   const onDragStart = (e: React.DragEvent, cardId: string) => {
@@ -72,12 +78,19 @@ export default function KanbanPage() {
     e.dataTransfer.dropEffect = "move";
   };
 
-  const onDrop = (colunaId: string) => {
+  const onDrop = async (colunaId: string) => {
     if (!arrastando) return;
-    setCards((prev) =>
-      prev.map((c) => (c.id === arrastando ? { ...c, colunaId } : c))
-    );
+    const cardArrastado = cards.find((c) => c.id === arrastando);
     setArrastando(null);
+    if (!cardArrastado || cardArrastado.colunaId === colunaId) return;
+    await update(arrastando, { colunaId });
+    const colunaNome = colunasKanbanPadrao.find((co) => co.id === colunaId)?.nome ?? "";
+    toast.success("Card movido", `"${cardArrastado.titulo}" → ${colunaNome}`);
+  };
+
+  const abrirNovoCard = (colunaId: string) => {
+    setColunaParaNovo(colunaId);
+    setModalAberto(true);
   };
 
   return (
@@ -95,9 +108,13 @@ export default function KanbanPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={turmaSelecionada} onValueChange={setTurmaSelecionada}>
+          <Select
+            value={turmaSelecionada}
+            onValueChange={setTurmaSelecionada}
+            disabled={turmasDisponiveis.length === 0}
+          >
             <SelectTrigger className="w-56">
-              <SelectValue />
+              <SelectValue placeholder="Nenhuma turma atribuída" />
             </SelectTrigger>
             <SelectContent>
               {turmasDisponiveis.map((t) => (
@@ -107,7 +124,7 @@ export default function KanbanPage() {
               ))}
             </SelectContent>
           </Select>
-          <Button>
+          <Button onClick={() => abrirNovoCard("c-todo")} disabled={!turmaSelecionada}>
             <Plus className="mr-2 h-4 w-4" /> Novo card
           </Button>
         </div>
@@ -130,6 +147,20 @@ export default function KanbanPage() {
         </Card>
       )}
 
+      {turmasDisponiveis.length === 0 && (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
+            <GraduationCap className="h-10 w-10 text-muted-foreground" />
+            <p className="font-semibold">Nenhuma turma atribuída ao seu usuário</p>
+            <p className="max-w-lg text-sm text-muted-foreground">
+              Peça à direção para conferir o nome do professor no cadastro da turma.
+              Até o vínculo ser confirmado, nenhum quadro de outras turmas será exibido.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {turmaAtual && (
       <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-4">
         {colunasKanbanPadrao.map((coluna) => {
           const cardsCol = cardsDaTurma.filter((c) => c.colunaId === coluna.id);
@@ -151,7 +182,12 @@ export default function KanbanPage() {
                     {cardsCol.length}
                   </Badge>
                 </div>
-                <Button size="icon" variant="ghost" className="h-6 w-6">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-6 w-6"
+                  onClick={() => abrirNovoCard(coluna.id)}
+                >
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
@@ -179,13 +215,6 @@ export default function KanbanPage() {
                           <Ic className="h-3 w-3" />
                           {card.tipo}
                         </Badge>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <MoreVertical className="h-3 w-3" />
-                        </Button>
                       </div>
                       <h4 className="font-semibold text-sm leading-snug mb-1">
                         {card.titulo}
@@ -223,6 +252,14 @@ export default function KanbanPage() {
           );
         })}
       </div>
+      )}
+
+      <NovoCardKanbanModal
+        aberto={modalAberto && Boolean(turmaSelecionada)}
+        onFechar={() => setModalAberto(false)}
+        turmaId={turmaSelecionada}
+        colunaId={colunaParaNovo}
+      />
     </div>
   );
 }

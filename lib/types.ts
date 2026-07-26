@@ -1,6 +1,6 @@
 // ============ Tipos centrais do sistema escolar ============
 
-export type Perfil = "diretor" | "coordenador" | "professor";
+export type Perfil = "diretor" | "coordenador" | "professor" | "financeiro";
 
 export type StatusIndicador = "verde" | "amarelo" | "vermelho";
 
@@ -13,18 +13,13 @@ export interface Escola {
   logoTexto: string; // iniciais para logo
 }
 
-// ----- Turmas -----
+// ----- Turmas (Escola Modelo Taubaté: educação infantil) -----
 export type SerieEnum =
-  | "Berçário"
-  | "Maternal I"
-  | "Maternal II"
-  | "Jardim I"
-  | "Jardim II"
-  | "1º Ano"
-  | "2º Ano"
-  | "3º Ano"
-  | "4º Ano"
-  | "5º Ano";
+  | "Mini Maternal"
+  | "Maternal"
+  | "Maternal 1"
+  | "Jardim"
+  | "Pré";
 
 export type Turno = "Manhã" | "Tarde" | "Integral";
 
@@ -45,10 +40,54 @@ export interface Responsavel {
   nome: string;
   parentesco: "Mãe" | "Pai" | "Avó" | "Avô" | "Tio" | "Tia" | "Outro";
   cpf: string;
+  rg?: string;
   telefone: string;
   email: string;
   endereco: string;
   principal: boolean;
+  // Campos da ficha física Escola Modelo
+  profissao?: string;
+  localTrabalho?: string;
+  dataNascimento?: string;
+  responsavelFinanceiro?: boolean;
+}
+
+export interface PessoaAutorizada {
+  nome: string;
+  parentesco: string;
+}
+
+export interface FichaSaude {
+  doencas: {
+    bronquite?: boolean;
+    catapora?: boolean;
+    caxumba?: boolean;
+    convulsao?: boolean;
+    coqueluche?: boolean;
+    diabete?: boolean;
+    hepatite?: boolean;
+    hepatiteTipo?: string;
+    pneumonia?: boolean;
+    problemasCoracao?: boolean;
+    rubeola?: boolean;
+    sarampo?: boolean;
+  };
+  doencasOutras?: string;
+  desmaioSim?: boolean;
+  desmaioMotivo?: string;
+  internadoSim?: boolean;
+  internadoMotivo?: string;
+  alergias?: string;
+  tratamentoMedicoSim?: boolean;
+  tratamentoMotivo?: string;
+  traumaFobia?: string;
+  medicamentoFebreSim?: boolean;
+  medicamentoFebreQual?: string;
+  medicoNome?: string;
+  medicoTelefone?: string;
+  convenioSim?: boolean;
+  convenioQual?: string;
+  informacoesComplementares?: string;
 }
 
 export interface Aluno {
@@ -65,6 +104,22 @@ export interface Aluno {
   responsaveis: Responsavel[];
   observacoes?: string;
   foto?: string;
+
+  // Campos da ficha completa (Escola Modelo)
+  ra?: string;
+  raca?: string;
+  sexo?: "M" | "F";
+  naturalDe?: string;
+  estado?: string;
+  cep?: string;
+  endereco?: string;
+  bairro?: string;
+  telefoneAluno?: string;
+  religiao?: string;
+  escolaAnteriorNome?: string;
+  escolaAnteriorTempo?: string;
+  pessoasAutorizadas?: PessoaAutorizada[];
+  fichaSaude?: FichaSaude;
 }
 
 // ----- Pedagógico -----
@@ -94,6 +149,21 @@ export interface AvaliacaoBimestre {
   logicaMatematica: NivelCompetencia;
   oralidade: NivelCompetencia;
   observacao?: string;
+}
+
+/** Registro persistido pela API; campos de competência podem ser nulos em dados legados. */
+export interface AvaliacaoPedagogica {
+  id: string;
+  alunoId: string;
+  bimestre: 1 | 2 | 3 | 4;
+  ano: number;
+  leituraNivel: NivelPsicogenese | null;
+  leitura: NivelCompetencia | null;
+  escrita: NivelCompetencia | null;
+  logicaMatematica: NivelCompetencia | null;
+  oralidade: NivelCompetencia | null;
+  observacao?: string | null;
+  createdAt?: string | null;
 }
 
 export interface PedagogicoAluno {
@@ -176,7 +246,12 @@ export interface KanbanCard {
 // ----- Estoque -----
 export type CategoriaEstoque = "Consumo" | "Venda";
 export type SubcategoriaConsumo = "Alimentos" | "Limpeza" | "Material Pedagógico";
-export type SubcategoriaVenda = "Uniforme" | "Festa" | "Material Escolar";
+export type SubcategoriaVenda =
+  | "Uniforme"
+  | "Festa"
+  | "Material Escolar"
+  | "Alimentação Extra"
+  | "Atividade Extra";
 
 export interface ItemEstoque {
   id: string;
@@ -191,10 +266,16 @@ export interface ItemEstoque {
   fornecedor?: string;
   validade?: string; // só para Consumo
   tamanho?: string; // para uniformes
+  codigoBarras?: string; // EAN/UPC para leitor de código de barras
 }
 
 // ----- Vendas -----
-export type TipoVenda = "Uniforme" | "Alimentação" | "Evento/Festa" | "Material";
+export type TipoVenda =
+  | "Uniforme"
+  | "Alimentação Extra"
+  | "Evento/Festa"
+  | "Material"
+  | "Atividade Extra";
 
 export interface Venda {
   id: string;

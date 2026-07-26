@@ -23,7 +23,7 @@ const cases = [
     desafio:
       "Inadimplência crescente (R$ 78K/mês), 3 sistemas separados (Excel, Sponte e ClassApp), zero visibilidade pedagógica entre coordenação e direção.",
     solucao:
-      "Migração completa para Semente em 5 dias. Régua de inadimplência ativa em dia 1. Avaliação pedagógica digitalizada por bimestre. App dos pais lançado em 30 dias.",
+      "Migração planejada para o Semente. Painel de inadimplência acompanhado pela equipe e avaliação pedagógica registrada por bimestre. Portal dos responsáveis mantido como etapa posterior da implantação.",
     resultado: [
       { icon: TrendingDown, label: "Inadimplência", valor: "−45%", cor: "text-emerald-600" },
       { icon: Clock, label: "Tempo em planilhas", valor: "−83%", cor: "text-emerald-600" },
@@ -71,7 +71,7 @@ const cases = [
     desafio:
       "Usavam 7 sistemas diferentes (Sponte, ClassApp, Conta Azul, Bling, Trello, Google Drive, WhatsApp). Equipe perdia 20h/semana copiando dado de um pro outro.",
     solucao:
-      "Consolidação total no Semente. CRM de captação ativado, app dos pais lançado, NFS-e automatizada. Treinamento presencial de 1 dia para a equipe inteira.",
+      "Cadastros, CRM, PDV e acompanhamento financeiro centralizados no Semente. Registros fiscais preparados para conferência e emissão externa; mensagens concluídas manualmente no WhatsApp.",
     resultado: [
       { icon: TrendingDown, label: "Sistemas em uso", valor: "7 → 1", cor: "text-emerald-600" },
       { icon: Clock, label: "Horas/semana economizadas", valor: "20h", cor: "text-emerald-600" },
@@ -79,7 +79,7 @@ const cases = [
       { icon: Heart, label: "Satisfação equipe interna", valor: "9,4/10", cor: "text-emerald-600" },
     ],
     citacao:
-      "Eu durmo tranquila agora. Antes era pesadelo: ‘será que emiti todas as NF?’, ‘será que cobrei todo mundo?’. Hoje o Semente faz isso sozinho.",
+      "Antes eu não sabia o que já tinha sido registrado e o que ainda dependia da equipe. Hoje o Semente centraliza essa conferência e deixa claras as etapas externas.",
     autor: "Patrícia Mendonça",
     cargo: "Dona",
     foto: "PM",
@@ -117,13 +117,13 @@ export default function CasesPage() {
         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
           <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 text-emerald-700 px-3 py-1 text-xs font-semibold mb-4">
             <Star className="h-3 w-3" />
-            Casos de sucesso
+            Cenários ilustrativos
           </div>
           <h1 className="text-3xl md:text-5xl font-bold tracking-tight">
-            Escolas que mudaram de patamar com a Semente
+            Exemplos de transformação com a Semente
           </h1>
           <p className="mt-4 text-muted-foreground text-lg">
-            Histórias reais, com números reais, contadas por quem viveu.
+            Cenários demonstrativos para visualizar usos possíveis. Nomes, depoimentos e indicadores abaixo não representam clientes ou resultados verificados.
           </p>
         </div>
       </section>

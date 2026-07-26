@@ -15,31 +15,31 @@ import { Button } from "@/components/ui/button";
 import { usePerfil } from "@/lib/perfil-context";
 import type { Perfil } from "@/lib/types";
 
-const STORAGE_KEY = "semente:welcome-seen";
+const STORAGE_KEY = "modelo:welcome-seen";
 
 const passos = [
   {
-    titulo: "Bem-vindo à demonstração ao vivo da Semente",
-    desc: "Você está navegando pelo sistema completo com dados fictícios da Escola Modelo (228 alunos, R$ 257K/mês). Explore à vontade — nada aqui é real.",
+    titulo: "Bem-vinda à Escola Modelo 🌻",
+    desc: "Esse é o sistema de gestão completo da escola. Tudo aqui é real — pode cadastrar alunos, mensalidades, vendas e atender pais pelo módulo de Atendimento.",
     cta: "Vamos lá",
     icon: Sprout,
   },
   {
-    titulo: "Comece pelo Cockpit",
-    desc: "Indicadores em tempo real, gráfico de faturamento, alertas inteligentes e o nosso diferencial: Insight do Dia gerado por IA cruzando todos os módulos.",
+    titulo: "Cockpit é seu painel diário",
+    desc: "Aqui você vê faturamento do mês, inadimplência, vendas, alertas e um Insight do Dia que cruza todos os dados. Use o seletor de mês pra navegar no tempo.",
     cta: "Próximo",
     icon: Sparkles,
   },
   {
-    titulo: "Troque de perfil quando quiser",
-    desc: "No canto superior direito, abra o menu do usuário e simule a visão de Diretor(a), Coordenador(a) ou Professor(a). A sidebar e o conteúdo se adaptam.",
+    titulo: "Atendimento centralizado",
+    desc: "Mensagens com responsáveis ficam em /whatsapp. Sua secretária e financeiro respondem por lá; você (diretora) vê tudo. Cada mensagem fica registrada no audit log.",
     cta: "Próximo",
     icon: Crown,
   },
   {
     titulo: "Busca rápida com ⌘K",
-    desc: "Aperte Cmd+K (ou Ctrl+K) em qualquer tela para abrir a paleta de comandos. Busque alunos, turmas, ações ou navegue por qualquer módulo em segundos.",
-    cta: "Quero começar",
+    desc: "Aperte Cmd+K (ou Ctrl+K) pra abrir a busca global e navegar pra qualquer módulo em segundos. Boas-vindas — qualquer dúvida estamos aqui pra ajudar 💛",
+    cta: "Começar",
     icon: Lightbulb,
   },
 ];

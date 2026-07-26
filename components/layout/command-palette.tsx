@@ -26,14 +26,15 @@ import {
   Briefcase,
   BarChart3,
   Settings,
-  Heart,
   Megaphone,
   Shield,
   CalendarCheck,
 } from "lucide-react";
-import { alunos } from "@/lib/mock-data/alunos";
-import { turmas } from "@/lib/mock-data/turmas";
+import { MODULO_POR_ROTA, rotaSomenteDiretor } from "@/lib/navigation-access";
+import { useModulos } from "@/lib/modulos-context";
+import { podeVer as podeVerModulo, usePerfil } from "@/lib/perfil-context";
 import { cn } from "@/lib/utils";
+import { podeGerenciarAlunos } from "@/lib/access-control";
 
 interface Comando {
   id: string;
@@ -48,6 +49,8 @@ interface Comando {
 
 export function CommandPalette() {
   const router = useRouter();
+  const { perfil } = usePerfil();
+  const { isAtivo } = useModulos();
   const [aberto, setAberto] = React.useState(false);
   const [busca, setBusca] = React.useState("");
   const [destaque, setDestaque] = React.useState(0);
@@ -72,7 +75,7 @@ export function CommandPalette() {
       { id: "nav-cockpit", label: "Cockpit", desc: "Visão geral do negócio", href: "/cockpit", grupo: "Navegação", icon: Sparkles, keywords: "dashboard home início" },
       { id: "nav-financeiro", label: "Financeiro", desc: "Faturamento, mensalidades, inadimplência", href: "/financeiro", grupo: "Navegação", icon: Banknote, keywords: "dinheiro money" },
       { id: "nav-vendas", label: "Vendas (PDV)", desc: "Uniformes, alimentação, eventos", href: "/vendas", grupo: "Navegação", icon: ShoppingCart },
-      { id: "nav-nf", label: "Nota Fiscal", desc: "NFS-e automática", href: "/nota-fiscal", grupo: "Navegação", icon: FileText, keywords: "nfse" },
+      { id: "nav-nf", label: "Controle fiscal", desc: "Registros internos para conferência", href: "/nota-fiscal", grupo: "Navegação", icon: FileText, keywords: "nfse fiscal" },
       { id: "nav-ped", label: "Pedagógico", desc: "Avaliação e evolução por aluno", href: "/pedagogico", grupo: "Navegação", icon: GraduationCap },
       { id: "nav-alunos", label: "Alunos", desc: "Cadastro e matrículas", href: "/alunos", grupo: "Navegação", icon: Users },
       { id: "nav-kanban", label: "Kanban", desc: "Quadro por turma", href: "/kanban", grupo: "Navegação", icon: Trello },
@@ -86,7 +89,6 @@ export function CommandPalette() {
       { id: "nav-patr", label: "Patrimônio", desc: "Bens e manutenção", href: "/patrimonio", grupo: "Navegação", icon: Building2 },
       { id: "nav-wpp", label: "WhatsApp", desc: "Grupos e cobrança", href: "/whatsapp", grupo: "Navegação", icon: MessageSquare, keywords: "zap whats" },
       { id: "nav-mural", label: "Mural", desc: "Comunicados internos", href: "/mural", grupo: "Navegação", icon: Megaphone },
-      { id: "nav-portal", label: "Portal dos Pais", desc: "App dos responsáveis", href: "/portal-pais", grupo: "Navegação", icon: Heart },
       { id: "nav-rh", label: "RH & Equipe", desc: "Folha, férias, avaliação", href: "/rh", grupo: "Navegação", icon: Briefcase },
       { id: "nav-crm", label: "Captação (CRM)", desc: "Funil de matrículas", href: "/crm", grupo: "Navegação", icon: Target, keywords: "leads vendas" },
       { id: "nav-relat", label: "Relatórios", desc: "Análises gerenciais", href: "/relatorios", grupo: "Navegação", icon: BarChart3 },
@@ -100,34 +102,19 @@ export function CommandPalette() {
       { id: "ac-venda", label: "Nova venda no PDV", desc: "Registrar uma venda", href: "/vendas", grupo: "Ações rápidas", icon: Plus },
       { id: "ac-aviso", label: "Novo aviso no mural", desc: "Publicar comunicado", href: "/mural", grupo: "Ações rápidas", icon: Plus },
       { id: "ac-evento", label: "Novo evento no calendário", desc: "Agendar atividade", href: "/calendario", grupo: "Ações rápidas", icon: Plus },
-      { id: "ac-cob", label: "Cobrar inadimplentes", desc: "Disparar régua de cobrança", href: "/financeiro", grupo: "Ações rápidas", icon: MessageSquare },
-      { id: "ac-nf", label: "Emitir NFS-e", desc: "Nova nota fiscal", href: "/nota-fiscal", grupo: "Ações rápidas", icon: FileText },
+      { id: "ac-cob", label: "Acompanhar inadimplentes", desc: "Abrir a régua de acompanhamento", href: "/financeiro", grupo: "Ações rápidas", icon: MessageSquare },
+      { id: "ac-nf", label: "Novo registro fiscal", desc: "Salvar um registro pendente", href: "/nota-fiscal", grupo: "Ações rápidas", icon: FileText },
     ];
 
-    const alunosCmds: Comando[] = alunos.map((a) => {
-      const turma = turmas.find((t) => t.id === a.turmaId);
-      return {
-        id: `aluno-${a.id}`,
-        label: a.nome,
-        desc: `${turma?.nome ?? "—"} · matrícula ${a.matricula}`,
-        href: `/alunos/${a.id}`,
-        grupo: "Alunos",
-        icon: Users,
-        keywords: a.responsaveis.map((r) => r.nome).join(" "),
-      };
+    return [...navegacao, ...acoes].filter((comando) => {
+      if (comando.id === "ac-aluno" && !podeGerenciarAlunos(perfil)) return false;
+      if (!comando.href) return true;
+      if (rotaSomenteDiretor(comando.href) && perfil !== "diretor") return false;
+      const moduloId = MODULO_POR_ROTA[comando.href];
+      if (!moduloId) return true;
+      return podeVerModulo(perfil, moduloId) && isAtivo(moduloId);
     });
-
-    const turmasCmds: Comando[] = turmas.map((t) => ({
-      id: `turma-${t.id}`,
-      label: t.nome,
-      desc: `${t.totalAlunos} alunos · ${t.professorNome}`,
-      href: "/pedagogico",
-      grupo: "Turmas",
-      icon: GraduationCap,
-    }));
-
-    return [...navegacao, ...acoes, ...alunosCmds, ...turmasCmds];
-  }, []);
+  }, [isAtivo, perfil]);
 
   const filtrados = React.useMemo(() => {
     if (!busca.trim()) {
@@ -203,7 +190,7 @@ export function CommandPalette() {
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Buscar alunos, turmas, módulos, ações..."
+            placeholder="Buscar módulos e ações..."
             className="flex-1 h-14 bg-transparent text-base outline-none placeholder:text-muted-foreground"
           />
           <kbd className="hidden sm:inline-flex items-center gap-1 rounded border bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
@@ -218,7 +205,7 @@ export function CommandPalette() {
               <div className="text-4xl mb-2">🔍</div>
               <div className="text-sm font-semibold">Nada encontrado</div>
               <div className="text-xs text-muted-foreground mt-1">
-                Tente "Sofia", "Jardim", "inadimplência"...
+                Tente "alunos", "financeiro" ou "calendário"...
               </div>
             </div>
           ) : (

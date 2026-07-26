@@ -6,19 +6,19 @@ import { ToastProvider } from "@/lib/toast";
 
 const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL ?? "https://semente-escolar.vercel.app";
-const siteTitle = "Semente — Sistema operacional da sua escola infantil";
+const siteTitle = "Escola Modelo — Gestão escolar completa";
 const siteDescription =
-  "Gestão administrativa, financeira e acompanhamento pedagógico num só lugar. Mais de 200 escolas confiam na Semente.";
+  "Sistema de gestão escolar da Escola Modelo Taubaté. Administração, financeiro, pedagógico e portal dos pais.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
     default: siteTitle,
-    template: "%s · Semente",
+    template: "%s · Escola Modelo",
   },
   description: siteDescription,
-  applicationName: "Semente",
-  authors: [{ name: "Semente" }],
+  applicationName: "Escola Modelo",
+  authors: [{ name: "Escola Modelo" }],
   generator: "Next.js",
   keywords: [
     "gestão escolar",
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
     type: "website",
     locale: "pt_BR",
     url: siteUrl,
-    siteName: "Semente",
+    siteName: "Escola Modelo",
     title: siteTitle,
     description: siteDescription,
   },

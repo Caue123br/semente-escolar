@@ -12,7 +12,7 @@ export const cardsKanban: KanbanCard[] = [
   {
     id: "k1",
     colunaId: "c-todo",
-    turmaId: "t5",
+    turmaId: "t-j-m",
     titulo: "Preparar projeto 'Animais da Fazenda'",
     descricao: "Selecionar livros, montar painel temático e atividades de pintura.",
     tipo: "Atividade",
@@ -22,7 +22,7 @@ export const cardsKanban: KanbanCard[] = [
   {
     id: "k2",
     colunaId: "c-todo",
-    turmaId: "t5",
+    turmaId: "t-j-m",
     titulo: "Avaliação bimestral — Leitura",
     descricao: "Aplicar atividade individual de identificação de letras e sílabas.",
     tipo: "Avaliação",
@@ -32,7 +32,7 @@ export const cardsKanban: KanbanCard[] = [
   {
     id: "k3",
     colunaId: "c-doing",
-    turmaId: "t5",
+    turmaId: "t-j-m",
     titulo: "Ensaio Festa Junina",
     descricao: "Coreografia da quadrilha — 3 ensaios por semana.",
     tipo: "Evento",
@@ -42,7 +42,7 @@ export const cardsKanban: KanbanCard[] = [
   {
     id: "k4",
     colunaId: "c-doing",
-    turmaId: "t5",
+    turmaId: "t-j-m",
     titulo: "Acompanhamento individual — Heitor",
     descricao: "Reforço em escrita silábica conforme orientação da coordenação.",
     tipo: "Pendência",
@@ -51,7 +51,7 @@ export const cardsKanban: KanbanCard[] = [
   {
     id: "k5",
     colunaId: "c-review",
-    turmaId: "t5",
+    turmaId: "t-j-m",
     titulo: "Portfólio bimestral",
     descricao: "Revisar com a coordenação antes do envio aos pais.",
     tipo: "Atividade",
@@ -61,7 +61,7 @@ export const cardsKanban: KanbanCard[] = [
   {
     id: "k6",
     colunaId: "c-done",
-    turmaId: "t5",
+    turmaId: "t-j-m",
     titulo: "Reunião de pais bimestral",
     descricao: "Realizada em 05/06. Boa adesão das famílias.",
     tipo: "Evento",
@@ -70,7 +70,7 @@ export const cardsKanban: KanbanCard[] = [
   {
     id: "k7",
     colunaId: "c-done",
-    turmaId: "t5",
+    turmaId: "t-j-m",
     titulo: "Projeto Dia das Mães",
     descricao: "Lembrancinhas entregues, painel montado.",
     tipo: "Atividade",
@@ -81,7 +81,7 @@ export const cardsKanban: KanbanCard[] = [
   {
     id: "k10",
     colunaId: "c-todo",
-    turmaId: "t7",
+    turmaId: "t-p-m",
     titulo: "Avaliação de Matemática — Adição até 20",
     tipo: "Avaliação",
     prazo: "2026-06-18",
@@ -90,7 +90,7 @@ export const cardsKanban: KanbanCard[] = [
   {
     id: "k11",
     colunaId: "c-doing",
-    turmaId: "t7",
+    turmaId: "t-p-m",
     titulo: "Projeto Leitura — 'O Pequeno Príncipe'",
     descricao: "Leitura coletiva e atividades de interpretação.",
     tipo: "Atividade",
@@ -100,7 +100,7 @@ export const cardsKanban: KanbanCard[] = [
   {
     id: "k12",
     colunaId: "c-doing",
-    turmaId: "t7",
+    turmaId: "t-p-m",
     titulo: "Visita à biblioteca municipal",
     tipo: "Evento",
     prazo: "2026-06-19",
@@ -109,7 +109,7 @@ export const cardsKanban: KanbanCard[] = [
   {
     id: "k13",
     colunaId: "c-done",
-    turmaId: "t7",
+    turmaId: "t-p-m",
     titulo: "Ditado bimestral",
     tipo: "Avaliação",
     responsavel: "Profa. Cláudia Martins",
@@ -119,7 +119,7 @@ export const cardsKanban: KanbanCard[] = [
   {
     id: "k20",
     colunaId: "c-todo",
-    turmaId: "t9",
+    turmaId: "t-p-t",
     titulo: "Saída pedagógica — Museu",
     tipo: "Evento",
     prazo: "2026-06-25",
@@ -128,7 +128,7 @@ export const cardsKanban: KanbanCard[] = [
   {
     id: "k21",
     colunaId: "c-doing",
-    turmaId: "t9",
+    turmaId: "t-p-t",
     titulo: "Produção textual — Conto inventado",
     tipo: "Atividade",
     prazo: "2026-06-17",

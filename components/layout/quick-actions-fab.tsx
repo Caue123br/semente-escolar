@@ -16,52 +16,77 @@ import { cn } from "@/lib/utils";
 import { NovaMatriculaModal } from "@/components/alunos/nova-matricula-modal";
 import { NovoAvisoModal } from "@/components/shared/novo-aviso-modal";
 import { NovoEventoModal } from "@/components/shared/novo-evento-modal";
+import { useEntidade } from "@/lib/data/store";
+import { useModulos } from "@/lib/modulos-context";
+import { podeVer as podeVerModulo, usePerfil } from "@/lib/perfil-context";
+import { podeGerenciarAlunos } from "@/lib/access-control";
+
+interface AcaoRapida {
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  modulo: string;
+  href?: string;
+  acao?: () => void;
+  cor: string;
+}
 
 export function QuickActionsFab() {
+  const { perfil } = usePerfil();
+  const { isAtivo } = useModulos();
   const [aberto, setAberto] = React.useState(false);
   const [modalAtivo, setModalAtivo] = React.useState<
     "matricula" | "aviso" | "evento" | null
   >(null);
   const ref = React.useRef<HTMLDivElement>(null);
 
-  const acoes = [
+  const acoes: AcaoRapida[] = [
     {
       label: "Nova matrícula",
       icon: UserPlus,
+      modulo: "alunos",
       acao: () => setModalAtivo("matricula"),
       cor: "bg-emerald-500",
     },
     {
       label: "Nova venda (PDV)",
       icon: ShoppingCart,
+      modulo: "vendas",
       href: "/vendas",
       cor: "bg-blue-500",
     },
     {
       label: "Novo aviso no mural",
       icon: Megaphone,
+      modulo: "mural",
       acao: () => setModalAtivo("aviso"),
       cor: "bg-purple-500",
     },
     {
       label: "Novo evento",
       icon: CalendarPlus,
+      modulo: "calendario",
       acao: () => setModalAtivo("evento"),
       cor: "bg-amber-500",
     },
     {
-      label: "Cobrar inadimplentes",
+      label: "Acompanhar inadimplentes",
       icon: MessageCircle,
+      modulo: "financeiro",
       href: "/financeiro",
       cor: "bg-rose-500",
     },
     {
-      label: "Emitir NFS-e",
+      label: "Novo registro fiscal",
       icon: FileText,
+      modulo: "nota-fiscal",
       href: "/nota-fiscal",
       cor: "bg-indigo-500",
     },
-  ];
+  ].filter((acao) =>
+    podeVerModulo(perfil, acao.modulo) &&
+    isAtivo(acao.modulo) &&
+    (acao.modulo !== "alunos" || podeGerenciarAlunos(perfil))
+  );
 
   React.useEffect(() => {
     const onClickFora = (e: MouseEvent) => {
@@ -131,18 +156,28 @@ export function QuickActionsFab() {
         </button>
       </div>
 
-      <NovaMatriculaModal
-        aberto={modalAtivo === "matricula"}
-        onClose={() => setModalAtivo(null)}
-      />
-      <NovoAvisoModal
-        aberto={modalAtivo === "aviso"}
-        onClose={() => setModalAtivo(null)}
-      />
-      <NovoEventoModal
-        aberto={modalAtivo === "evento"}
-        onClose={() => setModalAtivo(null)}
-      />
+      {modalAtivo === "matricula" && (
+        <MatriculaRapidaModal onClose={() => setModalAtivo(null)} />
+      )}
+      {modalAtivo === "aviso" && (
+        <NovoAvisoModal aberto onClose={() => setModalAtivo(null)} />
+      )}
+      {modalAtivo === "evento" && (
+        <NovoEventoModal aberto onClose={() => setModalAtivo(null)} />
+      )}
     </>
+  );
+}
+
+function MatriculaRapidaModal({ onClose }: { onClose: () => void }) {
+  const { items: turmas } = useEntidade("turmas");
+  const { add: addAluno } = useEntidade("alunos");
+  return (
+    <NovaMatriculaModal
+      aberto
+      onClose={onClose}
+      turmas={turmas}
+      onSalvar={addAluno}
+    />
   );
 }

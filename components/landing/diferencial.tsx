@@ -32,8 +32,8 @@ export function LandingDiferencial() {
             </div>
             <h3 className="text-2xl font-bold mt-2">Pare de descobrir tarde</h3>
             <p className="mt-2 text-muted-foreground">
-              Régua de inadimplência automática, cobrança via WhatsApp em 1 clique,
-              renegociação guiada — e o dono vê em tempo real o que entra e o que falta.
+              Régua de inadimplência calculada com os dados salvos, abertura do WhatsApp
+              para contato manual e visão do que entrou e do que continua pendente.
             </p>
 
             {/* Mini visual financeiro */}
@@ -65,8 +65,8 @@ export function LandingDiferencial() {
             </div>
             <h3 className="text-2xl font-bold mt-2">Veja o crescimento de cada aluno</h3>
             <p className="mt-2 text-muted-foreground">
-              Avaliação bimestral por competências, linha de evolução visual, alerta de
-              estagnação — informações que professores entendem e pais valorizam.
+              Avaliação bimestral por competências e linha de evolução visual para apoiar
+              o acompanhamento da equipe pedagógica.
             </p>
 
             {/* Mini visual pedagógico */}

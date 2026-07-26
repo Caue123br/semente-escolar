@@ -6,32 +6,32 @@ import { cn } from "@/lib/utils";
 
 const perguntas = [
   {
-    p: "Como funciona o teste gratuito de 14 dias?",
-    r: "Você acessa o sistema completo, sem cartão de crédito. Pode cadastrar alunos, lançar mensalidades e testar todos os módulos. Ao final dos 14 dias, decide se quer continuar — sem cobrança automática.",
+    p: "Como posso conhecer o sistema?",
+    r: "Solicite uma demonstração e escolha uma preferência de data e horário. O pedido fica registrado para confirmação da equipe; ele não cria sozinho um convite de calendário nem envia WhatsApp.",
   },
   {
     p: "Vocês fazem a migração dos meus dados?",
-    r: "Sim. Independente de onde estejam (planilhas Excel, Google Sheets, sistemas como Sponte, EduConnect, ClassApp), nossa equipe importa alunos, responsáveis, contratos e histórico financeiro — sem custo adicional nos planos Pro e Enterprise.",
+    r: "O sistema oferece exportação de dados e pode receber uma migração planejada. Formato, prazo e validação devem ser combinados antes da implantação; não há importação automática nesta instalação.",
   },
   {
     p: "Preciso instalar alguma coisa?",
-    r: "Não. Semente é 100% web. Funciona em qualquer navegador, computador, tablet ou celular. O app dos pais é disponibilizado como Progressive Web App (PWA), sem necessidade de baixar na loja.",
+    r: "Não. A interface é web e responsiva, acessada pelo navegador. A compatibilidade final deve ser validada nos aparelhos e navegadores usados pela escola.",
   },
   {
     p: "Meus dados ficam seguros?",
-    r: "Sim. Operamos em infraestrutura AWS no Brasil (São Paulo), com criptografia em trânsito (TLS 1.3) e em repouso (AES-256). Conformidade total com a LGPD, logs de auditoria de todas as ações e backup diário automatizado com retenção de 90 dias.",
+    r: "Esta instalação usa PostgreSQL, sessões protegidas e trilha de auditoria. Criptografia, localização do servidor, rotina de backup e retenção dependem da infraestrutura de publicação e precisam ser verificadas antes de colocar dados reais em produção.",
   },
   {
-    p: "A integração com WhatsApp é oficial?",
-    r: "Sim. Usamos a WhatsApp Business API oficial (Meta), com templates pré-aprovados para cobrança, comunicados e avisos. Mensagens chegam pelo WhatsApp Business da sua escola, não pelo nosso.",
+    p: "O sistema envia mensagens pelo WhatsApp?",
+    r: "Sem um conector oficial configurado, o sistema salva rascunhos e abre o WhatsApp para o usuário concluir o envio. Ele não confirma entrega, leitura ou disparo automático.",
   },
   {
     p: "E se eu precisar cancelar?",
-    r: "Sem fidelidade. Você cancela a qualquer momento, com aviso de 30 dias. Exportamos todos os seus dados em formato aberto (CSV/JSON/PDF) e mantemos backup por 12 meses após o cancelamento, conforme a LGPD.",
+    r: "Condições comerciais, cancelamento e retenção devem constar no contrato da implantação. A instalação possui exportação de dados, mas a política de guarda e exclusão depende da operação responsável pelo servidor.",
   },
   {
     p: "Vocês emitem nota fiscal pela minha escola?",
-    r: "Não emitimos pela sua escola — facilitamos. Você configura sua inscrição municipal e certificado digital A1, e o sistema emite NFS-e automaticamente nos principais municípios brasileiros (SP, RJ, BH, Curitiba, Porto Alegre, e mais 80 cidades).",
+    r: "O módulo atual mantém um controle fiscal interno e exporta os registros para conferência. Sem um conector municipal homologado, a emissão e a validação da NFS-e continuam no sistema da prefeitura.",
   },
   {
     p: "Funciona para escolas bilíngues, montessorianas, religiosas?",

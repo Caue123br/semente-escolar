@@ -10,7 +10,6 @@ const links = [
   { label: "Recursos", href: "#modulos" },
   { label: "Diferencial", href: "#diferencial" },
   { label: "Para quem", href: "#para-quem" },
-  { label: "Preços", href: "#precos" },
   { label: "FAQ", href: "#faq" },
 ];
 
@@ -62,14 +61,14 @@ export function LandingNavbar() {
 
           <div className="hidden md:flex items-center gap-3">
             <Button variant="ghost" size="sm" asChild>
-              <Link href="/cockpit">Entrar</Link>
+              <Link href="/login">Entrar</Link>
             </Button>
             <Button
               size="sm"
               asChild
               className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 shadow-md"
             >
-              <Link href="/cockpit">Ver demonstração ao vivo</Link>
+              <Link href="#agendar-demonstracao">Solicitar demonstração</Link>
             </Button>
           </div>
 
@@ -95,7 +94,7 @@ export function LandingNavbar() {
               </a>
             ))}
             <Button asChild className="w-full">
-              <Link href="/cockpit">Ver demonstração</Link>
+              <Link href="#agendar-demonstracao" onClick={() => setAberto(false)}>Solicitar demonstração</Link>
             </Button>
           </div>
         )}

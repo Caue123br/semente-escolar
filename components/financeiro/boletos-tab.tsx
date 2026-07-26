@@ -1,6 +1,7 @@
 "use client";
 
-import { QrCode, FileDown, Copy, Plus, Receipt } from "lucide-react";
+import * as React from "react";
+import { QrCode, Receipt } from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -8,98 +9,151 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { formatBRL } from "@/lib/utils";
-
-const cobrancas = [
-  { id: "c1", responsavel: "Mariana Almeida", aluno: "Sofia", valor: 2870, tipo: "Boleto", status: "Aguardando", venc: "2026-06-15" },
-  { id: "c2", responsavel: "Patrícia Costa", aluno: "Manuela", valor: 2870, tipo: "Pix", status: "Pago", venc: "2026-06-05" },
-  { id: "c3", responsavel: "Daniela Carvalho", aluno: "Bernardo", valor: 2670, tipo: "Pix", status: "Aguardando", venc: "2026-06-15" },
-  { id: "c4", responsavel: "Roberta Martins", aluno: "Helena", valor: 2870, tipo: "Boleto", status: "Aguardando", venc: "2026-06-15" },
-  { id: "c5", responsavel: "Camila Pereira", aluno: "Heitor", valor: 2290, tipo: "Pix", status: "Pago", venc: "2026-06-05" },
-];
+import { formatBRL, formatDateBR } from "@/lib/utils";
+import { useEntidade } from "@/lib/data/store";
+import { usePeriodoContexto } from "@/lib/contexto-periodo";
 
 export function BoletosTab() {
+  const { periodo } = usePeriodoContexto();
+  const { items: mensalidades } = useEntidade("mensalidades");
+  const [busca, setBusca] = React.useState("");
+  const [paginaAtual, setPaginaAtual] = React.useState(1);
+  const POR_PAGINA = 10;
+
+  const doMes = mensalidades.filter((m) => m.competencia === periodo.competencia);
+  const filtrados = doMes.filter((m) => {
+    if (!busca.trim()) return true;
+    const q = busca.toLowerCase();
+    return (
+      m.alunoNome.toLowerCase().includes(q) ||
+      m.turmaNome.toLowerCase().includes(q) ||
+      String(m.valor).includes(q)
+    );
+  });
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
+  const visiveis = filtrados.slice((paginaAtual - 1) * POR_PAGINA, paginaAtual * POR_PAGINA);
+
+  React.useEffect(() => {
+    if (paginaAtual > totalPaginas) setPaginaAtual(totalPaginas);
+  }, [paginaAtual, totalPaginas]);
+
+  const pagas = doMes.filter((m) => m.status === "Paga");
+  const pagasPix = pagas.filter((m) => m.formaPagamento === "Pix").length;
+  const pagasBoleto = pagas.filter((m) => m.formaPagamento === "Boleto").length;
+
+  const taxaPix = pagas.length > 0 ? (pagasPix / pagas.length) * 100 : 0;
+
+  const aguardando = doMes.filter((m) => m.status === "A Vencer" || m.status === "Vence Hoje");
+
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="p-5">
-          <div className="text-xs uppercase text-muted-foreground">Boletos emitidos</div>
-          <div className="mt-1 text-2xl font-bold">37</div>
-          <div className="text-xs text-muted-foreground mt-1">Junho/2026</div>
+          <div className="text-xs uppercase text-muted-foreground">Mensalidades cadastradas</div>
+          <div className="mt-1 text-2xl font-bold">{doMes.length}</div>
+          <div className="text-xs text-muted-foreground mt-1">{periodo.label}</div>
         </Card>
         <Card className="p-5">
-          <div className="text-xs uppercase text-muted-foreground">Pix QR gerados</div>
-          <div className="mt-1 text-2xl font-bold">42</div>
-          <div className="text-xs text-muted-foreground mt-1">73% de adesão</div>
+          <div className="text-xs uppercase text-muted-foreground">Aguardando pagamento</div>
+          <div className="mt-1 text-2xl font-bold text-warning">{aguardando.length}</div>
+          <div className="text-xs text-muted-foreground mt-1">{formatBRL(aguardando.reduce((a, m) => a + m.valor, 0))} a receber</div>
         </Card>
         <Card className="p-5">
           <div className="text-xs uppercase text-muted-foreground">Taxa de pagamento via Pix</div>
-          <div className="mt-1 text-2xl font-bold text-success">67%</div>
-          <div className="text-xs text-muted-foreground mt-1">vs 33% boleto</div>
+          <div className="mt-1 text-2xl font-bold text-success">{taxaPix.toFixed(0)}%</div>
+          <div className="text-xs text-muted-foreground mt-1">{pagasPix} Pix · {pagasBoleto} boleto</div>
         </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <QrCode className="h-4 w-4" /> Gerador Pix QR
-            </CardTitle>
-            <CardDescription>Crie cobrança com Pix dinâmico</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="aspect-square w-48 mx-auto rounded-lg border-2 border-dashed flex items-center justify-center bg-muted/30">
-              <QrCode className="h-24 w-24 text-muted-foreground" />
+      <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50 p-5">
+        <div className="flex items-start gap-3">
+          <QrCode className="h-6 w-6 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <div className="font-semibold text-sm text-amber-900">Integração Pix/Boleto automatizada — em breve</div>
+            <div className="text-xs text-amber-800 mt-1">
+              Pra gerar Pix QR e boletos automaticamente conforme as mensalidades, configure uma integração com banco/PSP
+              (Sicredi, Banco do Brasil, ASAAS, Iugu, etc). Hoje você marca manualmente como paga em &quot;Mensalidades&quot;.
             </div>
-            <div className="rounded-md bg-muted p-2 text-xs font-mono break-all">
-              00020126580014BR.GOV.BCB.PIX0136a3f2c5d7-b8e9-4c1a-9f0d-7e4b8c2a1d3f...
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" size="sm">
-                <Copy className="mr-2 h-4 w-4" /> Copiar código
-              </Button>
-              <Button className="flex-1" size="sm">
-                <FileDown className="mr-2 h-4 w-4" /> Baixar QR
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+      </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Receipt className="h-4 w-4" /> Cobranças recentes
-            </CardTitle>
-            <CardDescription>Boletos e Pix emitidos</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {cobrancas.map((c) => (
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Receipt className="h-4 w-4" /> Mensalidades de {periodo.label}
+              </CardTitle>
+              <CardDescription>{filtrados.length} de {doMes.length} mensalidades</CardDescription>
+            </div>
+            <input
+              type="text"
+              placeholder="Buscar aluno, turma ou valor..."
+              value={busca}
+              onChange={(e) => { setBusca(e.target.value); setPaginaAtual(1); }}
+              className="h-9 w-64 rounded-md border bg-background px-3 text-sm"
+            />
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {filtrados.length === 0 ? (
+            <div className="text-sm text-muted-foreground text-center py-6">
+              {busca ? `Nenhuma mensalidade encontrada pra "${busca}".` : `Nenhuma mensalidade em ${periodo.label}.`}
+            </div>
+          ) : (
+            visiveis.map((m) => (
               <div
-                key={c.id}
-                className="flex items-center justify-between rounded-lg border p-3 text-sm"
+                key={m.id}
+                className="flex items-center justify-between rounded-lg border p-3 text-sm flex-wrap gap-2"
               >
-                <div>
-                  <div className="font-semibold">{c.responsavel}</div>
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold truncate">{m.alunoNome}</div>
                   <div className="text-xs text-muted-foreground">
-                    {c.aluno} · {c.tipo} · vence {new Date(c.venc).toLocaleDateString("pt-BR")}
+                    {m.turmaNome} · vence {formatDateBR(m.vencimento)}
+                    {m.formaPagamento && ` · ${m.formaPagamento}`}
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="font-semibold">{formatBRL(c.valor)}</div>
-                  <Badge variant={c.status === "Pago" ? "success" : "warning"} className="text-[10px]">
-                    {c.status}
+                  <div className="font-semibold">{formatBRL(m.valor)}</div>
+                  <Badge
+                    variant={
+                      m.status === "Paga" ? "success"
+                      : m.status === "Atrasada" ? "danger"
+                      : "warning"
+                    }
+                    className="text-[10px]"
+                  >
+                    {m.status}
                   </Badge>
                 </div>
               </div>
-            ))}
-            <Button variant="outline" className="w-full" size="sm">
-              <Plus className="mr-2 h-4 w-4" /> Nova cobrança
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+            ))
+          )}
+          {totalPaginas > 1 && (
+            <div className="flex items-center justify-between gap-2 pt-3 text-xs">
+              <button
+                onClick={() => setPaginaAtual((p) => Math.max(1, p - 1))}
+                disabled={paginaAtual === 1}
+                className="rounded-md border px-3 py-1 hover:bg-accent disabled:opacity-40"
+              >
+                Anterior
+              </button>
+              <span className="text-muted-foreground">
+                Página {paginaAtual} de {totalPaginas}
+              </span>
+              <button
+                onClick={() => setPaginaAtual((p) => Math.min(totalPaginas, p + 1))}
+                disabled={paginaAtual === totalPaginas}
+                className="rounded-md border px-3 py-1 hover:bg-accent disabled:opacity-40"
+              >
+                Próxima
+              </button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

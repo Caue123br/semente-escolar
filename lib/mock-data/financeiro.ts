@@ -24,16 +24,11 @@ function valorMensalidade(turmaId: string, bilingue: boolean): number {
   const turma = turmas.find((t) => t.id === turmaId);
   if (!turma) return 1500;
   const base: Record<string, number> = {
-    Berçário: 2890,
-    "Maternal I": 2490,
-    "Maternal II": 2390,
-    "Jardim I": 2290,
-    "Jardim II": 2290,
-    "1º Ano": 2090,
-    "2º Ano": 2090,
-    "3º Ano": 2190,
-    "4º Ano": 2190,
-    "5º Ano": 2290,
+    "Mini Maternal": 1890,
+    Maternal: 1990,
+    "Maternal 1": 2090,
+    Jardim: 2190,
+    Pré: 2290,
   };
   let valor = base[turma.serie] ?? 2000;
   if (bilingue) valor += 580;

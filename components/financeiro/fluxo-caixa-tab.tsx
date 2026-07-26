@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -19,52 +20,96 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { formatBRL } from "@/lib/utils";
-
-const dados = [
-  { mes: "Jul/25", entrada: 184200, saida: 152400, saldo: 31800 },
-  { mes: "Ago/25", entrada: 191800, saida: 158200, saldo: 33600 },
-  { mes: "Set/25", entrada: 196200, saida: 163800, saldo: 32400 },
-  { mes: "Out/25", entrada: 199400, saida: 165400, saldo: 34000 },
-  { mes: "Nov/25", entrada: 198700, saida: 168200, saldo: 30500 },
-  { mes: "Dez/25", entrada: 207800, saida: 178500, saldo: 29300 },
-  { mes: "Jan/26", entrada: 215300, saida: 172800, saldo: 42500 },
-  { mes: "Fev/26", entrada: 218400, saida: 174300, saldo: 44100 },
-  { mes: "Mar/26", entrada: 220500, saida: 176200, saldo: 44300 },
-  { mes: "Abr/26", entrada: 219800, saida: 178600, saldo: 41200 },
-  { mes: "Mai/26", entrada: 215200, saida: 179800, saldo: 35400 },
-  { mes: "Jun/26", entrada: 198400, saida: 183300, saldo: 15100 },
-];
+import { useEntidade } from "@/lib/data/store";
+import { usePeriodoContexto } from "@/lib/contexto-periodo";
+import { MESES_PT_ABREV } from "@/components/shared/seletor-mes";
 
 export function FluxoCaixaTab() {
+  const { periodo } = usePeriodoContexto();
+  const { items: mensalidades } = useEntidade("mensalidades");
+  const { items: vendas } = useEntidade("vendas");
+  const { items: despesas } = useEntidade("despesas");
+  const { items: funcionarios } = useEntidade("funcionarios");
+
+  const folhaMensal = funcionarios.filter((f) => f.status === "Ativo").reduce((a, f) => a + f.salarioBruto, 0);
+  // Encargos estimados (~28%)
+  const folhaComEncargos = folhaMensal * 1.28;
+
+  // Calcula 12 meses (incluindo o atual)
+  const dados = React.useMemo(() => {
+    const lista: Array<{ mes: string; competencia: string; entrada: number; saida: number; saldo: number }> = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(periodo.ano, periodo.mes - i, 1);
+      const ano = d.getFullYear();
+      const m = d.getMonth();
+      const mm = String(m + 1).padStart(2, "0");
+      const comp = `${ano}-${mm}`;
+      const inicioMes = `${ano}-${mm}-01`;
+      const ultimoDia = new Date(ano, m + 1, 0).getDate();
+      const fimMes = `${ano}-${mm}-${String(ultimoDia).padStart(2, "0")}`;
+
+      // Entradas: mensalidades pagas + vendas
+      const entradaMens = mensalidades
+        .filter((mn) => mn.competencia === comp && mn.status === "Paga")
+        .reduce((a, mn) => a + (mn.valorPago ?? mn.valor), 0);
+      const entradaVendas = vendas
+        .filter((v) => v.data >= inicioMes && v.data <= fimMes)
+        .reduce((a, v) => a + v.total, 0);
+      const entrada = entradaMens + entradaVendas;
+
+      // Saídas: despesas pagas + estimativa de folha
+      const saidaDespesas = despesas
+        .filter((dp) => dp.data >= inicioMes && dp.data <= fimMes && dp.status === "Paga")
+        .reduce((a, dp) => a + dp.valor, 0);
+      const saida = saidaDespesas + folhaComEncargos;
+
+      lista.push({
+        mes: `${MESES_PT_ABREV[m]}/${String(ano).slice(2)}`,
+        competencia: comp,
+        entrada,
+        saida,
+        saldo: entrada - saida,
+      });
+    }
+    return lista;
+  }, [periodo, mensalidades, vendas, despesas, folhaComEncargos]);
+
+  const saldoMesAtual = dados[dados.length - 1]?.saldo ?? 0;
   const saldoAcumulado = dados.reduce((a, b) => a + b.saldo, 0);
+  const mediaSaldo3m = dados.slice(-3).reduce((a, b) => a + b.saldo, 0) / 3;
+  const projecao3m = mediaSaldo3m * 3;
+
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="p-5">
-          <div className="text-xs uppercase text-muted-foreground">Saldo do mês</div>
-          <div className="mt-1 text-2xl font-bold text-success">
-            {formatBRL(dados[dados.length - 1].saldo)}
+          <div className="text-xs uppercase text-muted-foreground">Saldo de {periodo.label}</div>
+          <div className={`mt-1 text-2xl font-bold ${saldoMesAtual >= 0 ? "text-success" : "text-danger"}`}>
+            {formatBRL(saldoMesAtual)}
           </div>
-          <div className="text-xs text-muted-foreground mt-1">
-            Junho · entrada - saída
-          </div>
+          <div className="text-xs text-muted-foreground mt-1">Entradas - saídas (estimado)</div>
         </Card>
         <Card className="p-5">
           <div className="text-xs uppercase text-muted-foreground">Saldo acumulado 12m</div>
-          <div className="mt-1 text-2xl font-bold">{formatBRL(saldoAcumulado)}</div>
-          <div className="text-xs text-muted-foreground mt-1">Jul/25 → Jun/26</div>
+          <div className={`mt-1 text-2xl font-bold ${saldoAcumulado >= 0 ? "text-foreground" : "text-danger"}`}>
+            {formatBRL(saldoAcumulado)}
+          </div>
         </Card>
         <Card className="p-5">
           <div className="text-xs uppercase text-muted-foreground">Projeção próximos 3m</div>
-          <div className="mt-1 text-2xl font-bold text-primary">{formatBRL(132400)}</div>
+          <div className={`mt-1 text-2xl font-bold ${projecao3m >= 0 ? "text-primary" : "text-danger"}`}>
+            {formatBRL(projecao3m)}
+          </div>
           <div className="text-xs text-muted-foreground mt-1">Com base na média móvel</div>
         </Card>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Fluxo de caixa — 12 meses</CardTitle>
-          <CardDescription>Entradas, saídas e saldo mensal</CardDescription>
+          <CardTitle>Fluxo de caixa — 12 meses até {periodo.label}</CardTitle>
+          <CardDescription>
+            Entradas (mensalidades + vendas), saídas (despesas + folha com encargos), saldo mensal.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="h-[340px]">

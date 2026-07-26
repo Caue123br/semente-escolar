@@ -5,7 +5,7 @@ import {
   FileText,
   Plus,
   Download,
-  Send,
+  Save,
   CheckCircle,
   XCircle,
   Clock,
@@ -38,12 +38,82 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table";
-import { notasFiscais } from "@/lib/mock-data/notas-fiscais";
-import { formatBRL, formatDateBR } from "@/lib/utils";
+import { useEntidade } from "@/lib/data/store";
+import { useToast } from "@/lib/toast";
+import type { NotaFiscal } from "@/lib/types";
+import { formatBRL, formatDateBR, formatDateLocalISO } from "@/lib/utils";
 
 export default function NotaFiscalPage() {
+  const { items: notasFiscais, add } = useEntidade("notasFiscais");
+  const toast = useToast();
   const emitidas = notasFiscais.filter((n) => n.status === "Emitida");
   const totalEmitido = emitidas.reduce((a, n) => a + n.valor, 0);
+  const anoAtual = new Date().getFullYear();
+  const proxNumero = `REG-${anoAtual}/${String(
+    notasFiscais.filter((n) => n.numero?.startsWith(`REG-${anoAtual}/`)).length + 1
+  ).padStart(4, "0")}`;
+
+  const [tomador, setTomador] = React.useState("");
+  const [cpfCnpj, setCpfCnpj] = React.useState("");
+  const [servico, setServico] = React.useState("Ensino regular (mensalidade)");
+  const [descricao, setDescricao] = React.useState("");
+  const [valor, setValor] = React.useState(0);
+  const [busca, setBusca] = React.useState("");
+
+  const registrosFiltrados = notasFiscais.filter((nota) => {
+    const termo = busca.trim().toLowerCase();
+    if (!termo) return true;
+    return [nota.numero, nota.cliente, nota.cpfCnpj, nota.servico]
+      .some((campo) => campo?.toLowerCase().includes(termo));
+  });
+
+  const exportarCSV = () => {
+    if (registrosFiltrados.length === 0) return;
+    const linhas = [
+      ["Protocolo", "Data", "Cliente", "CPF/CNPJ", "Descrição", "Valor", "Status"],
+      ...registrosFiltrados.map((nota) => [
+        nota.numero,
+        nota.data,
+        nota.cliente,
+        nota.cpfCnpj,
+        nota.servico,
+        nota.valor,
+        nota.status,
+      ]),
+    ];
+    const csv = linhas
+      .map((linha) => linha.map((campo) => `"${String(campo ?? "").replace(/"/g, '""')}"`).join(";"))
+      .join("\n");
+    const url = URL.createObjectURL(new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `registros-fiscais-${formatDateLocalISO()}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const registrar = async () => {
+    if (!tomador || !cpfCnpj || !valor) {
+      toast.error("Dados incompletos", "Preencha tomador, CPF/CNPJ e valor");
+      return;
+    }
+    const nova: NotaFiscal = {
+      id: `nf-${Date.now()}`,
+      numero: proxNumero,
+      data: formatDateLocalISO(),
+      cliente: tomador,
+      cpfCnpj,
+      valor,
+      servico: descricao || servico,
+      status: "Pendente",
+    };
+    await add(nova);
+    toast.success("Registro fiscal salvo", "O servidor gerou um protocolo interno e deixou o registro pendente.");
+    setTomador("");
+    setCpfCnpj("");
+    setDescricao("");
+    setValor(0);
+  };
 
   return (
     <div className="space-y-6">
@@ -53,27 +123,27 @@ export default function NotaFiscalPage() {
             <FileText className="h-3.5 w-3.5" /> NOTA FISCAL
           </div>
           <h1 className="mt-1 text-2xl font-bold tracking-tight lg:text-3xl">
-            Notas Fiscais (NFS-e)
+            Controle fiscal
           </h1>
           <p className="text-sm text-muted-foreground">
-            Emissão automática integrada com a prefeitura de São Paulo.
+            Registros internos para conferência antes da emissão no sistema da prefeitura.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="success" className="px-3 py-1">
-            <CheckCircle className="mr-1.5 h-3.5 w-3.5" />
-            Certificado A1 ativo
+          <Badge variant="warning" className="px-3 py-1">
+            <Clock className="mr-1.5 h-3.5 w-3.5" />
+            Integração municipal não configurada
           </Badge>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="p-5">
-          <div className="text-xs uppercase text-muted-foreground">Emitidas no mês</div>
+          <div className="text-xs uppercase text-muted-foreground">Marcadas como emitidas</div>
           <div className="mt-1 text-2xl font-bold">{emitidas.length}</div>
         </Card>
         <Card className="p-5">
-          <div className="text-xs uppercase text-muted-foreground">Total faturado</div>
+          <div className="text-xs uppercase text-muted-foreground">Valor marcado como emitido</div>
           <div className="mt-1 text-2xl font-bold">{formatBRL(totalEmitido)}</div>
         </Card>
         <Card className="p-5">
@@ -83,16 +153,16 @@ export default function NotaFiscalPage() {
           </div>
         </Card>
         <Card className="p-5">
-          <div className="text-xs uppercase text-muted-foreground">Próximo número</div>
-          <div className="mt-1 text-2xl font-bold text-primary">2026/0248</div>
+          <div className="text-xs uppercase text-muted-foreground">Próximo protocolo</div>
+          <div className="mt-1 text-lg font-bold text-primary">{proxNumero}</div>
         </Card>
       </div>
 
       <Tabs defaultValue="lista" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="lista">Lista de NF-e</TabsTrigger>
+          <TabsTrigger value="lista">Registros fiscais</TabsTrigger>
           <TabsTrigger value="emitir">
-            <Plus className="mr-1.5 h-4 w-4" /> Emitir nova
+            <Plus className="mr-1.5 h-4 w-4" /> Novo registro
           </TabsTrigger>
           <TabsTrigger value="config">Configurações</TabsTrigger>
         </TabsList>
@@ -102,16 +172,23 @@ export default function NotaFiscalPage() {
             <CardHeader>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <CardTitle>Notas fiscais emitidas</CardTitle>
-                  <CardDescription>{notasFiscais.length} notas no histórico</CardDescription>
+                  <CardTitle>Histórico fiscal interno</CardTitle>
+                  <CardDescription>
+                    {notasFiscais.length} registro(s). O status não substitui a consulta à prefeitura.
+                  </CardDescription>
                 </div>
                 <div className="flex gap-2">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input placeholder="Buscar NF..." className="pl-9 w-56" />
+                    <Input
+                      placeholder="Buscar registro..."
+                      className="pl-9 w-56"
+                      value={busca}
+                      onChange={(event) => setBusca(event.target.value)}
+                    />
                   </div>
-                  <Button variant="outline" size="sm">
-                    <Download className="mr-2 h-4 w-4" /> Exportar XML
+                  <Button variant="outline" size="sm" onClick={exportarCSV} disabled={registrosFiltrados.length === 0}>
+                    <Download className="mr-2 h-4 w-4" /> Exportar CSV
                   </Button>
                 </div>
               </div>
@@ -120,18 +197,24 @@ export default function NotaFiscalPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Número</TableHead>
+                    <TableHead>Protocolo / número informado</TableHead>
                     <TableHead>Data</TableHead>
                     <TableHead>Cliente</TableHead>
                     <TableHead>CPF/CNPJ</TableHead>
                     <TableHead>Serviço</TableHead>
                     <TableHead>Valor</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {notasFiscais.map((n) => {
+                  {registrosFiltrados.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                        Nenhum registro encontrado.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {registrosFiltrados.map((n) => {
                     const StatusIcon =
                       n.status === "Emitida"
                         ? CheckCircle
@@ -164,11 +247,6 @@ export default function NotaFiscalPage() {
                             {n.status}
                           </Badge>
                         </TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="icon">
-                            <Download className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
                       </TableRow>
                     );
                   })}
@@ -181,36 +259,32 @@ export default function NotaFiscalPage() {
         <TabsContent value="emitir">
           <Card>
             <CardHeader>
-              <CardTitle>Emitir nova NFS-e</CardTitle>
+              <CardTitle>Novo registro fiscal pendente</CardTitle>
               <CardDescription>
-                Preencha os dados — emissão automática ao confirmar
+                Salva os dados no sistema. A emissão e o envio devem ser concluídos externamente.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <Label>Tomador (cliente)</Label>
-                  <Input className="mt-1.5" placeholder="Nome do responsável" />
+                  <Input className="mt-1.5" placeholder="Nome do responsável" value={tomador} onChange={(e) => setTomador(e.target.value)} />
                 </div>
                 <div>
                   <Label>CPF/CNPJ</Label>
-                  <Input className="mt-1.5" placeholder="000.000.000-00" />
-                </div>
-                <div>
-                  <Label>E-mail para envio</Label>
-                  <Input className="mt-1.5" type="email" placeholder="email@exemplo.com" />
+                  <Input className="mt-1.5" placeholder="000.000.000-00" value={cpfCnpj} onChange={(e) => setCpfCnpj(e.target.value)} />
                 </div>
                 <div>
                   <Label>Tipo de serviço</Label>
-                  <Select defaultValue="ensino">
+                  <Select value={servico} onValueChange={setServico}>
                     <SelectTrigger className="mt-1.5">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="ensino">Ensino regular (mensalidade)</SelectItem>
-                      <SelectItem value="venda">Venda de uniforme</SelectItem>
-                      <SelectItem value="evento">Material de festa</SelectItem>
-                      <SelectItem value="alimentacao">Alimentação extra</SelectItem>
+                      <SelectItem value="Ensino regular (mensalidade)">Ensino regular (mensalidade)</SelectItem>
+                      <SelectItem value="Venda de uniforme">Venda de uniforme</SelectItem>
+                      <SelectItem value="Material de festa">Material de festa</SelectItem>
+                      <SelectItem value="Alimentação extra">Alimentação extra</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -221,30 +295,24 @@ export default function NotaFiscalPage() {
                   className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   rows={3}
                   placeholder="Ex: Mensalidade escolar — Junho/2026 — Aluno: ..."
+                  value={descricao}
+                  onChange={(e) => setDescricao(e.target.value)}
                 />
               </div>
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-1">
                 <div>
                   <Label>Valor</Label>
-                  <Input className="mt-1.5" type="number" placeholder="0,00" />
-                </div>
-                <div>
-                  <Label>ISS (%)</Label>
-                  <Input className="mt-1.5" type="number" defaultValue={5} />
-                </div>
-                <div>
-                  <Label>Código de serviço</Label>
-                  <Input className="mt-1.5" defaultValue="08.01" />
+                  <Input className="mt-1.5" type="number" placeholder="0,00" value={valor || ""} onChange={(e) => setValor(Number(e.target.value))} />
                 </div>
               </div>
-              <div className="rounded-lg bg-primary/5 border border-primary/20 p-4 text-sm">
-                <div className="font-semibold mb-1">Próximo número</div>
-                <div className="text-2xl font-mono font-bold text-primary">NF-2026/0248</div>
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+                <div className="font-semibold mb-1">Protocolo interno</div>
+                <div className="text-xl font-mono font-bold">{proxNumero}</div>
+                <p className="mt-1 text-xs">Não é um número de NFS-e e não comprova emissão fiscal.</p>
               </div>
               <div className="flex justify-end gap-2">
-                <Button variant="outline">Salvar rascunho</Button>
-                <Button>
-                  <Send className="mr-2 h-4 w-4" /> Emitir e enviar
+                <Button onClick={registrar}>
+                  <Save className="mr-2 h-4 w-4" /> Salvar como pendente
                 </Button>
               </div>
             </CardContent>
@@ -254,16 +322,14 @@ export default function NotaFiscalPage() {
         <TabsContent value="config">
           <Card>
             <CardHeader>
-              <CardTitle>Configurações NF-e</CardTitle>
+              <CardTitle>Integração fiscal</CardTitle>
+              <CardDescription>Nenhum conector municipal foi configurado neste ambiente.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <ConfigRow label="Prefeitura" value="São Paulo / SP" />
-              <ConfigRow label="Inscrição Municipal" value="3.456.789-0" />
-              <ConfigRow label="Regime tributário" value="Simples Nacional" />
-              <ConfigRow label="Código CNAE" value="8512-1/00 — Educação infantil" />
-              <ConfigRow label="Alíquota ISS padrão" value="5,00%" />
-              <ConfigRow label="Certificado digital" value="A1 — válido até 12/01/2027" />
-              <ConfigRow label="E-mail para envio automático" value="Sim — após cada venda" />
+              <ConfigRow label="Prefeitura / provedor" value="Não configurado" />
+              <ConfigRow label="Inscrição municipal" value="Não configurada" />
+              <ConfigRow label="Certificado digital" value="Não configurado" />
+              <ConfigRow label="Envio automático" value="Desativado" />
             </CardContent>
           </Card>
         </TabsContent>

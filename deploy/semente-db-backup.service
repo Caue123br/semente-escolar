@@ -1,0 +1,12 @@
+[Unit]
+Description=Backup local do PostgreSQL Semente
+After=postgresql@16-semente.service
+Requires=postgresql@16-semente.service
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/local/sbin/semente-db-backup
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

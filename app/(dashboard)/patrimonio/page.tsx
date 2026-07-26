@@ -1,6 +1,7 @@
 "use client";
 
-import { Building2, Wrench, AlertTriangle, Plus } from "lucide-react";
+import * as React from "react";
+import { Building2, Wrench, Plus } from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -19,29 +20,15 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table";
+import { useEntidade } from "@/lib/data/store";
+import { NovoPatrimonioModal } from "@/components/shared/novo-patrimonio-modal";
 import { formatBRL, formatDateBR } from "@/lib/utils";
 
-const patrimonio = [
-  { id: "pt1", item: "Ar-condicionado Split 12.000 BTUs", local: "Sala Jardim II - A", valor: 2890, dataCompra: "2023-02-15", status: "Operacional", responsavel: "Manutenção" },
-  { id: "pt2", item: "Lousa interativa 75pol", local: "Sala 1º Ano - A", valor: 8500, dataCompra: "2024-01-20", status: "Operacional", responsavel: "TI" },
-  { id: "pt3", item: "Mesa retangular 8 lugares", local: "Sala dos professores", valor: 1200, dataCompra: "2020-08-10", status: "Operacional", responsavel: "—" },
-  { id: "pt4", item: "Notebook Dell i5 16GB", local: "Secretaria", valor: 4200, dataCompra: "2023-09-01", status: "Operacional", responsavel: "Aline Camargo" },
-  { id: "pt5", item: "Brinquedoteca — Casinha de madeira", local: "Brinquedoteca", valor: 3400, dataCompra: "2022-03-15", status: "Em manutenção", responsavel: "—" },
-  { id: "pt6", item: "Geladeira 450L", local: "Cozinha", valor: 3890, dataCompra: "2021-06-22", status: "Operacional", responsavel: "Dona Marlene" },
-  { id: "pt7", item: "Forno industrial 4 bocas", local: "Cozinha", valor: 5200, dataCompra: "2019-01-15", status: "Operacional", responsavel: "Dona Marlene" },
-  { id: "pt8", item: "Projetor multimídia", local: "Auditório", valor: 3100, dataCompra: "2022-08-01", status: "Defeito", responsavel: "TI" },
-];
-
-const ordensManutencao = [
-  { id: "om1", item: "Brinquedoteca — Casinha", descricao: "Reparar telhado da casinha", prioridade: "Média", status: "Em andamento", dataAbertura: "2026-06-05" },
-  { id: "om2", item: "Projetor auditório", descricao: "Lâmpada queimada", prioridade: "Alta", status: "Aberta", dataAbertura: "2026-06-07" },
-  { id: "om3", item: "Portão principal", descricao: "Motor falhando ao abrir", prioridade: "Alta", status: "Em andamento", dataAbertura: "2026-06-06" },
-  { id: "om4", item: "Banheiro infantil 2", descricao: "Vaso entupido", prioridade: "Baixa", status: "Concluída", dataAbertura: "2026-06-04" },
-];
-
 export default function PatrimonioPage() {
+  const { items: patrimonio } = useEntidade("patrimonio");
+  const [modalAberto, setModalAberto] = React.useState(false);
   const totalPatrimonio = patrimonio.reduce((a, p) => a + p.valor, 0);
-  const operacionais = patrimonio.filter((p) => p.status === "Operacional").length;
+  const operacionais = patrimonio.filter((p) => p.estado === "Ótimo" || p.estado === "Bom").length;
 
   return (
     <div className="space-y-6">
@@ -57,7 +44,7 @@ export default function PatrimonioPage() {
             Bens da escola e ordens de serviço.
           </p>
         </div>
-        <Button>
+        <Button onClick={() => setModalAberto(true)}>
           <Plus className="mr-2 h-4 w-4" /> Cadastrar bem
         </Button>
       </div>
@@ -76,10 +63,8 @@ export default function PatrimonioPage() {
           <div className="mt-1 text-2xl font-bold text-success">{operacionais}</div>
         </Card>
         <Card className="p-5">
-          <div className="text-xs uppercase text-muted-foreground">OS abertas</div>
-          <div className="mt-1 text-2xl font-bold text-warning">
-            {ordensManutencao.filter((o) => o.status !== "Concluída").length}
-          </div>
+          <div className="text-xs uppercase text-muted-foreground">Ordens de serviço</div>
+          <div className="mt-1 text-sm font-semibold text-muted-foreground">Não configuradas</div>
         </Card>
       </div>
 
@@ -116,14 +101,14 @@ export default function PatrimonioPage() {
                       <TableCell>
                         <Badge
                           variant={
-                            p.status === "Operacional"
+                            p.estado === "Ótimo" || p.estado === "Bom"
                               ? "success"
-                              : p.status === "Em manutenção"
+                              : p.estado === "Regular"
                               ? "warning"
                               : "danger"
                           }
                         >
-                          {p.status}
+                          {p.estado}
                         </Badge>
                       </TableCell>
                     </TableRow>
@@ -138,47 +123,18 @@ export default function PatrimonioPage() {
           <Card>
             <CardHeader>
               <CardTitle>Ordens de Serviço</CardTitle>
-              <CardDescription>Manutenções abertas e em andamento</CardDescription>
+              <CardDescription>O cadastro persistente de manutenções ainda não faz parte deste módulo.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {ordensManutencao.map((o) => (
-                <div
-                  key={o.id}
-                  className={`rounded-lg border-l-4 p-4 ${
-                    o.prioridade === "Alta"
-                      ? "border-l-danger bg-danger/5"
-                      : o.prioridade === "Média"
-                      ? "border-l-warning bg-warning/5"
-                      : "border-l-muted-foreground bg-muted/30"
-                  }`}
-                >
-                  <div className="flex items-start justify-between mb-1">
-                    <div>
-                      <div className="font-semibold">{o.item}</div>
-                      <div className="text-sm text-muted-foreground">{o.descricao}</div>
-                    </div>
-                    <Badge
-                      variant={
-                        o.status === "Concluída"
-                          ? "success"
-                          : o.status === "Em andamento"
-                          ? "info"
-                          : "warning"
-                      }
-                    >
-                      {o.status}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
-                    <span>Aberta em {formatDateBR(o.dataAbertura)}</span>
-                    <span>Prioridade: <strong>{o.prioridade}</strong></span>
-                  </div>
-                </div>
-              ))}
+            <CardContent>
+              <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+                Use o estado dos bens para registrar a condição atual. Nenhuma ordem fictícia é exibida como dado da escola.
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      <NovoPatrimonioModal aberto={modalAberto} onFechar={() => setModalAberto(false)} />
     </div>
   );
 }

@@ -10,12 +10,17 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { rotasTransporte, alunosTransportePorRota } from "@/lib/mock-data/transporte";
-import { alunos } from "@/lib/mock-data/alunos";
+import { useEntidade } from "@/lib/data/store";
 
 export default function TransportePage() {
-  const totalAlunos = rotasTransporte.reduce((a, r) => a + r.alunosAtuais, 0);
+  const { items: rotasTransporte } = useEntidade("transporte");
+  const { items: alunos } = useEntidade("alunos");
+  const alunosPorId = new Map(alunos.map((aluno) => [aluno.id, aluno]));
+  const todosAlunosIds = rotasTransporte.flatMap((rota) => rota.alunosIds ?? []);
+  const totalAlunos = new Set(todosAlunosIds.filter((id) => alunosPorId.has(id))).size;
+  const totalVinculos = todosAlunosIds.length;
   const totalCapacidade = rotasTransporte.reduce((a, r) => a + r.capacidade, 0);
+  const ocupacaoTotal = totalCapacidade > 0 ? (totalVinculos / totalCapacidade) * 100 : 0;
 
   return (
     <div className="space-y-6">
@@ -45,23 +50,26 @@ export default function TransportePage() {
         <Card className="p-5">
           <div className="text-xs uppercase text-muted-foreground">Ocupação</div>
           <div className="mt-1 text-2xl font-bold text-success">
-            {((totalAlunos / totalCapacidade) * 100).toFixed(0)}%
+            {ocupacaoTotal.toFixed(0)}%
           </div>
         </Card>
         <Card className="p-5">
           <div className="text-xs uppercase text-muted-foreground">Vagas livres</div>
           <div className="mt-1 text-2xl font-bold text-warning">
-            {totalCapacidade - totalAlunos}
+            {Math.max(totalCapacidade - totalVinculos, 0)}
           </div>
         </Card>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         {rotasTransporte.map((rota) => {
-          const ocupacao = (rota.alunosAtuais / rota.capacidade) * 100;
-          const alunosRota = (alunosTransportePorRota[rota.id] ?? [])
-            .map((id) => alunos.find((a) => a.id === id))
-            .filter(Boolean);
+          const alunosIds = rota.alunosIds ?? [];
+          const ocupacao = rota.capacidade > 0 ? (alunosIds.length / rota.capacidade) * 100 : 0;
+          const alunosRota = alunosIds.flatMap((id) => {
+            const aluno = alunosPorId.get(id);
+            return aluno ? [aluno] : [];
+          });
+          const vinculosSemAluno = alunosIds.length - alunosRota.length;
           return (
             <Card key={rota.id}>
               <CardHeader>
@@ -76,7 +84,7 @@ export default function TransportePage() {
                     </CardDescription>
                   </div>
                   <Badge variant={ocupacao > 90 ? "warning" : "success"}>
-                    {rota.alunosAtuais}/{rota.capacidade}
+                    {alunosIds.length}/{rota.capacidade}
                   </Badge>
                 </div>
               </CardHeader>
@@ -133,24 +141,29 @@ export default function TransportePage() {
                     <Users className="h-3 w-3" /> Alunos ({alunosRota.length})
                   </div>
                   <div className="flex flex-wrap gap-1">
-                    {alunosRota.slice(0, 8).map(
-                      (a) =>
-                        a && (
-                          <Badge
-                            key={a.id}
-                            variant="secondary"
-                            className="text-[10px]"
-                          >
-                            {a.nome.split(" ")[0]}
-                          </Badge>
-                        )
-                    )}
+                    {alunosRota.slice(0, 8).map((aluno) => (
+                      <Badge
+                        key={aluno.id}
+                        variant="secondary"
+                        className="text-[10px]"
+                      >
+                        {aluno.nome.split(" ")[0]}
+                      </Badge>
+                    ))}
                     {alunosRota.length > 8 && (
                       <Badge variant="outline" className="text-[10px]">
                         +{alunosRota.length - 8}
                       </Badge>
                     )}
+                    {alunosIds.length === 0 && (
+                      <span className="text-xs text-muted-foreground">Nenhum aluno vinculado por ID.</span>
+                    )}
                   </div>
+                  {vinculosSemAluno > 0 && (
+                    <div className="mt-2 text-xs text-warning">
+                      {vinculosSemAluno} vínculo(s) apontam para aluno não encontrado no cadastro carregado.
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

@@ -2,45 +2,59 @@
 
 import * as React from "react";
 import type { Perfil } from "@/lib/types";
+import { podeAcessarModulo } from "@/lib/access-control";
 
 interface PerfilContextValue {
   perfil: Perfil;
-  setPerfil: (p: Perfil) => void;
   nome: string;
+  carregando: boolean;
 }
-
-const PERFIL_INFO: Record<Perfil, { nome: string }> = {
-  diretor: { nome: "Renata Andrade" },
-  coordenador: { nome: "Cláudio Vasconcelos" },
-  professor: { nome: "Mariana Costa" },
-};
 
 const PerfilContext = React.createContext<PerfilContextValue | undefined>(undefined);
 
+function isPerfil(value: unknown): value is Perfil {
+  return ["diretor", "coordenador", "professor", "financeiro"].includes(String(value));
+}
+
 export function PerfilProvider({ children }: { children: React.ReactNode }) {
-  const [perfil, setPerfil] = React.useState<Perfil>("diretor");
-  return (
-    <PerfilContext.Provider
-      value={{ perfil, setPerfil, nome: PERFIL_INFO[perfil].nome }}
-    >
-      {children}
-    </PerfilContext.Provider>
-  );
+  const [state, setState] = React.useState<PerfilContextValue>({
+    perfil: "professor",
+    nome: "Usuário",
+    carregando: true,
+  });
+
+  React.useEffect(() => {
+    let active = true;
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Sessão indisponível");
+        return response.json();
+      })
+      .then(({ usuario }) => {
+        if (!active) return;
+        if (!usuario || !isPerfil(usuario.perfil)) {
+          setState({ perfil: "professor", nome: "Usuário", carregando: false });
+          return;
+        }
+        setState({ perfil: usuario.perfil, nome: String(usuario.nome), carregando: false });
+      })
+      .catch(() => {
+        if (active) setState((current) => ({ ...current, carregando: false }));
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return <PerfilContext.Provider value={state}>{children}</PerfilContext.Provider>;
 }
 
 export function usePerfil() {
-  const ctx = React.useContext(PerfilContext);
-  if (!ctx) throw new Error("usePerfil deve ser usado dentro de PerfilProvider");
-  return ctx;
+  const context = React.useContext(PerfilContext);
+  if (!context) throw new Error("usePerfil deve ser usado dentro de PerfilProvider");
+  return context;
 }
 
 export function podeVer(perfil: Perfil, modulo: string): boolean {
-  if (perfil === "diretor") return true;
-  if (perfil === "coordenador") {
-    // Coordenador vê tudo menos talvez nota fiscal/vendas?
-    // Spec diz: pedagógico + administrativo (acesso amplo, exceto talvez decisões financeiras finais)
-    return modulo !== "nota-fiscal";
-  }
-  // Professor: só pedagógico, kanban (das suas turmas), whatsapp (das suas turmas), alunos (das suas turmas)
-  return ["cockpit-professor", "pedagogico", "kanban", "whatsapp", "alunos"].includes(modulo);
+  return podeAcessarModulo(perfil, modulo);
 }

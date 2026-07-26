@@ -5,11 +5,11 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
+  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
 } from "recharts";
 import {
   Card,
@@ -26,10 +26,17 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { turmas } from "@/lib/mock-data/turmas";
-import { alunos } from "@/lib/mock-data/alunos";
-import { pedagogicoPorAluno, alunosEstagnados } from "@/lib/mock-data/pedagogico";
-import { NIVEIS_PSICOGENESE, NivelPsicogenese } from "@/lib/types";
+import {
+  avaliacoesDoAluno,
+  listarAlunosEstagnados,
+} from "@/lib/pedagogico";
+import {
+  NIVEIS_PSICOGENESE,
+  type Aluno,
+  type AvaliacaoPedagogica,
+  type NivelPsicogenese,
+  type Turma,
+} from "@/lib/types";
 
 const CORES_NIVEL: Record<NivelPsicogenese, string> = {
   "Pré-silábico": "#fb923c",
@@ -38,56 +45,80 @@ const CORES_NIVEL: Record<NivelPsicogenese, string> = {
   Alfabético: "#10b981",
 };
 
-export function VisaoTurma() {
-  const turmasComAlunos = turmas.filter((t) =>
-    alunos.some((a) => a.turmaId === t.id)
+interface Props {
+  alunos: Aluno[];
+  turmas: Turma[];
+  avaliacoes: AvaliacaoPedagogica[];
+}
+
+export function VisaoTurma({ alunos, turmas, avaliacoes }: Props) {
+  const alunosAtivos = alunos.filter((aluno) => aluno.status === "Ativo");
+  const turmasComAlunos = turmas.filter((turma) =>
+    alunosAtivos.some((aluno) => aluno.turmaId === turma.id)
   );
-  // t5 = Jardim II - A (turma rica em alunos para demonstrar a tela)
-  const [turmaId, setTurmaId] = React.useState("t5");
+  const [turmaId, setTurmaId] = React.useState("");
 
-  const turmaAtual = turmas.find((t) => t.id === turmaId);
-  const alunosTurma = alunos.filter((a) => a.turmaId === turmaId);
-  const estagnados = alunosEstagnados().filter((e) => e.turmaId === turmaId);
+  React.useEffect(() => {
+    if (!turmasComAlunos.some((turma) => turma.id === turmaId)) {
+      setTurmaId(turmasComAlunos[0]?.id ?? "");
+    }
+  }, [turmaId, turmasComAlunos]);
 
-  // Distribuição de leitura na turma
-  const dist: Record<NivelPsicogenese, number> = {
+  const turmaAtual = turmas.find((turma) => turma.id === turmaId);
+  const alunosTurma = alunosAtivos.filter((aluno) => aluno.turmaId === turmaId);
+  const avaliacoesAtuais = alunosTurma.flatMap((aluno) => {
+    const ultima = avaliacoesDoAluno(avaliacoes, aluno.id).at(-1);
+    return ultima ? [ultima] : [];
+  });
+  const estagnados = listarAlunosEstagnados(alunosTurma, avaliacoes);
+
+  const distribuicao: Record<NivelPsicogenese, number> = {
     "Pré-silábico": 0,
     Silábico: 0,
     "Silábico-alfabético": 0,
     Alfabético: 0,
   };
-  for (const aluno of alunosTurma) {
-    const ped = pedagogicoPorAluno.find((p) => p.alunoId === aluno.id);
-    if (ped) {
-      const atual = ped.avaliacoes[1] ?? ped.avaliacoes[ped.avaliacoes.length - 1];
-      dist[atual.leituraNivel]++;
-    }
+  const totais = { leitura: 0, escrita: 0, logicaMatematica: 0, oralidade: 0 };
+  for (const avaliacao of avaliacoesAtuais) {
+    distribuicao[avaliacao.leituraNivel] += 1;
+    totais.leitura += avaliacao.leitura;
+    totais.escrita += avaliacao.escrita;
+    totais.logicaMatematica += avaliacao.logicaMatematica;
+    totais.oralidade += avaliacao.oralidade;
   }
 
-  // Média de competências
-  const totais = { leitura: 0, escrita: 0, logicaMatematica: 0, oralidade: 0 };
-  for (const aluno of alunosTurma) {
-    const ped = pedagogicoPorAluno.find((p) => p.alunoId === aluno.id);
-    if (ped) {
-      const u = ped.avaliacoes[1] ?? ped.avaliacoes[ped.avaliacoes.length - 1];
-      totais.leitura += u.leitura;
-      totais.escrita += u.escrita;
-      totais.logicaMatematica += u.logicaMatematica;
-      totais.oralidade += u.oralidade;
-    }
-  }
-  const n = alunosTurma.length || 1;
+  const quantidadeAvaliada = avaliacoesAtuais.length;
   const medias = [
-    { competencia: "Leitura", media: +(totais.leitura / n).toFixed(2) },
-    { competencia: "Escrita", media: +(totais.escrita / n).toFixed(2) },
-    { competencia: "Lógica-Matemática", media: +(totais.logicaMatematica / n).toFixed(2) },
-    { competencia: "Oralidade", media: +(totais.oralidade / n).toFixed(2) },
+    {
+      competencia: "Leitura",
+      media: quantidadeAvaliada
+        ? +(totais.leitura / quantidadeAvaliada).toFixed(2)
+        : 0,
+    },
+    {
+      competencia: "Escrita",
+      media: quantidadeAvaliada
+        ? +(totais.escrita / quantidadeAvaliada).toFixed(2)
+        : 0,
+    },
+    {
+      competencia: "Lógica-Matemática",
+      media: quantidadeAvaliada
+        ? +(totais.logicaMatematica / quantidadeAvaliada).toFixed(2)
+        : 0,
+    },
+    {
+      competencia: "Oralidade",
+      media: quantidadeAvaliada
+        ? +(totais.oralidade / quantidadeAvaliada).toFixed(2)
+        : 0,
+    },
   ];
 
-  const distArr = NIVEIS_PSICOGENESE.map((n) => ({
-    nivel: n,
-    quantidade: dist[n],
-    cor: CORES_NIVEL[n],
+  const distArr = NIVEIS_PSICOGENESE.map((nivel) => ({
+    nivel,
+    quantidade: distribuicao[nivel],
+    cor: CORES_NIVEL[nivel],
   }));
 
   return (
@@ -97,17 +128,28 @@ export function VisaoTurma() {
           <div>
             <CardTitle>Visão da turma</CardTitle>
             <CardDescription>
-              {turmaAtual?.nome} · {alunosTurma.length} alunos · {turmaAtual?.professorNome}
+              {turmaAtual ? (
+                <>
+                  {turmaAtual.nome} · {quantidadeAvaliada} avaliados de {alunosTurma.length}
+                  {turmaAtual.professorNome ? ` · ${turmaAtual.professorNome}` : ""}
+                </>
+              ) : (
+                "Nenhuma turma com alunos ativos"
+              )}
             </CardDescription>
           </div>
-          <Select value={turmaId} onValueChange={setTurmaId}>
+          <Select
+            value={turmaId || undefined}
+            onValueChange={setTurmaId}
+            disabled={turmasComAlunos.length === 0}
+          >
             <SelectTrigger className="w-56">
-              <SelectValue />
+              <SelectValue placeholder="Selecione uma turma" />
             </SelectTrigger>
             <SelectContent>
-              {turmasComAlunos.map((t) => (
-                <SelectItem key={t.id} value={t.id}>
-                  {t.nome}
+              {turmasComAlunos.map((turma) => (
+                <SelectItem key={turma.id} value={turma.id}>
+                  {turma.nome}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -115,64 +157,74 @@ export function VisaoTurma() {
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div>
-            <h4 className="text-sm font-semibold mb-3">
-              Distribuição por nível de leitura (psicogênese)
-            </h4>
-            <div className="h-[220px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={distArr} layout="vertical" margin={{ left: 30 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
-                  <YAxis
-                    type="category"
-                    dataKey="nivel"
-                    tick={{ fontSize: 11 }}
-                    width={120}
-                  />
-                  <Tooltip />
-                  <Bar dataKey="quantidade" radius={[0, 6, 6, 0]}>
-                    {distArr.map((e, i) => (
-                      <rect key={i} fill={e.cor} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+        {!turmaAtual ? (
+          <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+            Cadastre uma turma e vincule alunos para visualizar os indicadores pedagógicos.
           </div>
+        ) : quantidadeAvaliada === 0 ? (
+          <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+            Esta turma ainda não possui avaliações completas registradas.
+          </div>
+        ) : (
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div>
+              <h4 className="mb-3 text-sm font-semibold">
+                Distribuição por nível de leitura (psicogênese)
+              </h4>
+              <div className="h-[220px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={distArr} layout="vertical" margin={{ left: 30 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                    <YAxis
+                      type="category"
+                      dataKey="nivel"
+                      tick={{ fontSize: 11 }}
+                      width={120}
+                    />
+                    <Tooltip />
+                    <Bar dataKey="quantidade" radius={[0, 6, 6, 0]}>
+                      {distArr.map((item) => (
+                        <Cell key={item.nivel} fill={item.cor} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
 
-          <div>
-            <h4 className="text-sm font-semibold mb-3">
-              Média da turma por competência (escala 1-4)
-            </h4>
-            <div className="h-[220px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={medias}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="competencia" tick={{ fontSize: 10 }} />
-                  <YAxis domain={[0, 4]} tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Bar
-                    dataKey="media"
-                    fill="hsl(var(--primary))"
-                    radius={[6, 6, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+            <div>
+              <h4 className="mb-3 text-sm font-semibold">
+                Média da turma por competência (escala 1-4)
+              </h4>
+              <div className="h-[220px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={medias}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="competencia" tick={{ fontSize: 10 }} />
+                    <YAxis domain={[0, 4]} tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Bar
+                      dataKey="media"
+                      fill="hsl(var(--primary))"
+                      radius={[6, 6, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {estagnados.length > 0 && (
           <div className="rounded-lg border-l-4 border-warning bg-warning/5 p-4">
-            <div className="flex items-center gap-2 text-sm font-semibold text-warning mb-1">
+            <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-warning">
               ⚠️ {estagnados.length} aluno(s) em estagnação nesta turma
             </div>
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {estagnados.map((e) => (
-                <Badge key={e.alunoId} variant="warning" className="text-xs">
-                  {e.alunoNome}
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {estagnados.map((item) => (
+                <Badge key={item.alunoId} variant="warning" className="text-xs">
+                  {item.alunoNome}
                 </Badge>
               ))}
             </div>

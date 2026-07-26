@@ -1,44 +1,50 @@
-# 🌱 Semente — Sistema operacional da sua escola infantil
+# 🌱 Semente — Gestão escolar
 
-Sistema SaaS de gestão escolar que une **administrativo, financeiro e pedagógico** num só lugar.
-
-**Demonstração ao vivo:** https://semente-escolar.vercel.app (em breve)
+Aplicação web de gestão escolar que reúne fluxos **administrativos, financeiros e pedagógicos** sobre PostgreSQL.
 
 ---
 
 ## ✨ O diferencial
 
-Pela 1ª vez, **financeiro e pedagógico conversam no mesmo dashboard**. Enquanto outros sistemas tratam essas áreas como ilhas, na Semente elas estão entrelaçadas — você decide com a foto completa.
+Os módulos usam a mesma base de dados e o cockpit adapta consultas e indicadores ao perfil autenticado.
 
 ## 🚀 Features
 
-- **24 módulos** · **100+ telas** · totalmente em PT-BR
-- **Cockpit** com Insight do Dia (IA) e Antes vs Depois
-- **Financeiro completo:** régua de inadimplência, conciliação, DRE, fluxo de caixa, boletos/Pix
-- **Pedagógico diferencial:** psicogênese da escrita, linha de evolução, radar de competências, alerta de estagnação
-- **WhatsApp Business** integrado: grupos por turma + cobrança automática
-- **CRM de matrículas** com funil de 7 estágios
-- **24 módulos:** Alunos, Kanban, Estoque, Vendas/PDV, Nota Fiscal, RH, Calendário, Cardápio, Transporte, Biblioteca, Berçário, Reservas, Patrimônio, Mural, Portal dos Pais, Relatórios, Frequência, LGPD, Configurações...
+- Matrícula, turmas, avaliações, frequência, estoque e vendas persistidos no PostgreSQL
+- **Cockpit por perfil**, sem buscar ou exibir módulos não autorizados
+- **Financeiro:** mensalidades, inadimplência, despesas e relatórios com dados cadastrados
+- **Pedagógico:** psicogênese da escrita, evolução e competências por aluno
+- **CRM de matrículas** com funil de sete estágios
+- Alunos, Kanban, Estoque, PDV, controle fiscal, RH, Calendário, Cardápio, Transporte, Biblioteca, Berçário, Reservas, Patrimônio, Mural, Relatórios, Frequência, LGPD e Configurações
 - **Command Palette (⌘K)** com busca fuzzy de tudo
 - **Atalhos de teclado** completos (`?` para ver)
 - **Dark mode** com persistência
 - **Modo apresentação** (foco máximo)
 - **Mobile responsive** com drawer
-- **Multi-perfil** (Diretor / Coordenador / Professor)
+- **Multi-perfil** (Diretor / Coordenador / Professor / Financeiro)
+
+Integrações municipais, bancárias, de calendário e de WhatsApp **não vêm conectadas**. Sem um provedor configurado, o sistema mantém registros internos ou abre o aplicativo externo e não afirma envio, leitura, conciliação ou emissão fiscal.
 
 ## 🛠 Stack
 
-- **Next.js 15** (App Router) + TypeScript
+- **Next.js 16** (App Router) + TypeScript
 - **Tailwind CSS** + shadcn/ui
 - **Recharts** para gráficos
 - **lucide-react** para ícones
-- **libSQL (SQLite)** local para dev / **Turso ou Supabase** em produção
+- **PostgreSQL 16 nativo** com acesso exclusivo pelo servidor
+- Sessões revogáveis no banco, senhas com bcrypt e uploads privados em disco persistente
 
 ## 📦 Rodando localmente
 
 ```bash
 # Instalar dependências
 pnpm install
+
+# Configure DATABASE_URL e DATABASE_MIGRATION_URL
+cp .env.local.example .env.local
+
+# Criar o schema no PostgreSQL
+pnpm db:migrate
 
 # Subir o servidor
 pnpm dev
@@ -47,36 +53,21 @@ pnpm dev
 open http://localhost:3000
 ```
 
-Na primeira requisição, o banco SQLite é criado automaticamente em `data/semente.db` com seed completo da "Escola Semente Feliz" (228 alunos, 12 turmas, etc).
+Com `ENABLE_DEMO_SEED=false`, o sistema não cria dados fictícios. Depois das migrations, crie o primeiro diretor com `pnpm db:bootstrap-admin`; o comando exige os dados em variáveis de ambiente e nunca possui senha padrão. Fixtures de demonstração só devem ser habilitadas deliberadamente em desenvolvimento.
 
 ## ☁️ Deploy
 
-### Vercel
-```bash
-vercel
-```
+Em produção, a aplicação Next e o PostgreSQL rodam na VPS. O domínio pode continuar sob DNS da Vercel, apontando para o Nginx da VPS. O banco escuta somente em `127.0.0.1`, portanto a porta PostgreSQL não deve ser aberta na internet.
 
-⚠️ **Atenção:** o filesystem é read-only em Vercel Functions. Pra persistência em produção, use:
-
-- **Turso** (libSQL na nuvem — mesma API do SQLite local)
-- **Supabase** (Postgres + Auth + Storage)
-- **Neon** (Postgres serverless)
-
-Veja `COMO-ATIVAR-SUPABASE.md` ou abra issue pra setup Turso.
+Veja [`COMO-ATIVAR-POSTGRESQL.md`](COMO-ATIVAR-POSTGRESQL.md) para a topologia, variáveis e ordem segura de ativação.
 
 ## 📂 Estrutura
 
 ```
 app/
 ├── (dashboard)/         # Sistema (24 módulos)
-├── api/                 # API routes (SQLite CRUD)
-├── login/               # Tela de login
-├── sobre/               # Páginas marketing
-├── cases/
-├── calculadora/
-├── comparativo/
-├── ajuda/
-├── demo/
+├── api/                 # API server-side sobre PostgreSQL
+├── login/               # Autenticação de funcionários
 └── page.tsx             # Landing page
 
 components/
@@ -89,9 +80,9 @@ components/
 └── shared/              # Skeleton, EmptyState, etc.
 
 lib/
-├── db/                  # libSQL client + schema + mappers
-├── data/                # Data store (fetch API + localStorage fallback)
-├── mock-data/           # Seeds (Escola Semente Feliz)
+├── db/                  # PostgreSQL, sessões, auditoria e mappers
+├── data/                # Store que consome apenas a API autenticada
+├── mock-data/           # Fixtures opcionais, desativadas em produção
 ├── types.ts             # Tipos centrais
 ├── perfil-context.tsx
 ├── theme-context.tsx
@@ -99,14 +90,14 @@ lib/
 └── utils.ts             # cn, formatBRL, etc.
 ```
 
-## 🧪 Testando como dono de escola
+## Verificações
 
-1. Acesse `/` → landing page
-2. Clique em "Ver demonstração ao vivo" → entra no sistema
-3. Modal de boas-vindas aparece com tour de 4 passos
-4. Use `⌘K` pra buscar qualquer coisa
-5. FAB+ (canto inferior direito) → adicionar aluno/evento/aviso
-6. Tudo persiste no banco SQLite local
+```bash
+pnpm run typecheck
+pnpm run build
+```
+
+O endpoint `/api/health` só responde com sucesso quando a aplicação consegue executar uma consulta no PostgreSQL.
 
 ## 📋 Licença
 

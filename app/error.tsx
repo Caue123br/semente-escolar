@@ -13,7 +13,7 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("[Semente] erro não tratado:", error);
+    console.error("[Escola Modelo] erro não tratado:", error);
   }, [error]);
 
   return (

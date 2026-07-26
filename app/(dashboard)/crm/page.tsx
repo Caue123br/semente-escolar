@@ -4,10 +4,8 @@ import * as React from "react";
 import {
   Target,
   Plus,
-  TrendingUp,
   Phone,
   Mail,
-  Calendar,
   MessageCircle,
 } from "lucide-react";
 import {
@@ -21,9 +19,18 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { leads, funilEstatisticas } from "@/lib/mock-data/crm";
-import type { EstagioFunil } from "@/lib/mock-data/crm";
+import { useEntidade } from "@/lib/data/store";
+import { NovoLeadModal } from "@/components/shared/novo-lead-modal";
 import { formatBRL, formatDateBR, initials, cn } from "@/lib/utils";
+
+type EstagioFunil =
+  | "Lead"
+  | "Contato Inicial"
+  | "Visita Agendada"
+  | "Visita Realizada"
+  | "Proposta"
+  | "Matriculado"
+  | "Perdido";
 
 const ESTAGIOS: { id: EstagioFunil; cor: string; bg: string }[] = [
   { id: "Lead", cor: "border-slate-400", bg: "bg-slate-100" },
@@ -36,6 +43,26 @@ const ESTAGIOS: { id: EstagioFunil; cor: string; bg: string }[] = [
 ];
 
 export default function CrmPage() {
+  const { items: leads, update: updateLead } = useEntidade("crm");
+  const [modalAberto, setModalAberto] = React.useState(false);
+  const [leadParaMatricular, setLeadParaMatricular] = React.useState<typeof leads[number] | null>(null);
+  const funilEstatisticas = React.useMemo(() => {
+    const agora = new Date();
+    const prefixoMes = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}`;
+    const matriculados = leads.filter((lead) => lead.estagio === "Matriculado");
+    const leadsComPotencial = leads.filter((lead) => lead.valorPotencial > 0);
+    const potencialTotal = leadsComPotencial.reduce((total, lead) => total + lead.valorPotencial, 0);
+
+    return {
+      totalLeads: leads.length,
+      novosMes: leads.filter((lead) => lead.dataPrimeiroContato.startsWith(prefixoMes)).length,
+      visitasAgendadas: leads.filter((lead) => lead.estagio === "Visita Agendada").length,
+      matriculados: matriculados.length,
+      taxaConversao: leads.length > 0 ? (matriculados.length / leads.length) * 100 : 0,
+      potencialMedio: leadsComPotencial.length > 0 ? potencialTotal / leadsComPotencial.length : 0,
+    };
+  }, [leads]);
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -50,7 +77,7 @@ export default function CrmPage() {
             Acompanhe leads desde o primeiro contato até a matrícula.
           </p>
         </div>
-        <Button>
+        <Button onClick={() => setModalAberto(true)}>
           <Plus className="mr-2 h-4 w-4" /> Novo lead
         </Button>
       </div>
@@ -65,26 +92,26 @@ export default function CrmPage() {
           <div className="mt-1 text-2xl font-bold text-primary">{funilEstatisticas.novosMes}</div>
         </Card>
         <Card className="p-5">
-          <div className="text-xs uppercase text-muted-foreground">Visitas agendadas</div>
+          <div className="text-xs uppercase text-muted-foreground">Visitas agendadas (atuais)</div>
           <div className="mt-1 text-2xl font-bold text-warning">
-            {funilEstatisticas.visitasAgendadasMes}
+            {funilEstatisticas.visitasAgendadas}
           </div>
         </Card>
         <Card className="p-5">
-          <div className="text-xs uppercase text-muted-foreground">Matriculados</div>
+          <div className="text-xs uppercase text-muted-foreground">Matriculados (total)</div>
           <div className="mt-1 text-2xl font-bold text-success">
-            {funilEstatisticas.matriculadosMes}
+            {funilEstatisticas.matriculados}
           </div>
         </Card>
         <Card className="p-5">
           <div className="text-xs uppercase text-muted-foreground">Conversão</div>
           <div className="mt-1 text-2xl font-bold text-success">
-            {funilEstatisticas.taxaConversao}%
+            {funilEstatisticas.taxaConversao.toFixed(1)}%
           </div>
         </Card>
         <Card className="p-5">
-          <div className="text-xs uppercase text-muted-foreground">Ticket médio</div>
-          <div className="mt-1 text-xl font-bold">{formatBRL(funilEstatisticas.ticketMedio)}</div>
+          <div className="text-xs uppercase text-muted-foreground">Potencial médio</div>
+          <div className="mt-1 text-xl font-bold">{formatBRL(funilEstatisticas.potencialMedio)}</div>
         </Card>
       </div>
 
@@ -176,10 +203,40 @@ export default function CrmPage() {
                     <div className="text-xs text-muted-foreground">Potencial</div>
                     <div className="font-bold text-primary">{formatBRL(lead.valorPotencial)}</div>
                   </div>
-                  <div className="flex gap-1">
-                    <Button size="icon" variant="ghost"><Phone className="h-4 w-4" /></Button>
-                    <Button size="icon" variant="ghost"><MessageCircle className="h-4 w-4" /></Button>
-                    <Button size="icon" variant="ghost"><Mail className="h-4 w-4" /></Button>
+                  <div className="flex gap-1 items-center flex-wrap">
+                    <a
+                      href={`tel:${lead.telefone.replace(/\D/g, "")}`}
+                      className="inline-flex items-center justify-center h-8 w-8 rounded-md border hover:bg-accent"
+                      title="Ligar"
+                    >
+                      <Phone className="h-4 w-4" />
+                    </a>
+                    <a
+                      href={`https://wa.me/55${lead.telefone.replace(/\D/g, "")}?text=${encodeURIComponent(`Olá ${lead.nomeResponsavel}, sou da Escola Modelo. Tudo bem?`)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center justify-center h-8 w-8 rounded-md border hover:bg-accent"
+                      title="WhatsApp"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                    </a>
+                    <a
+                      href={`mailto:${lead.email}`}
+                      className="inline-flex items-center justify-center h-8 w-8 rounded-md border hover:bg-accent"
+                      title="Email"
+                    >
+                      <Mail className="h-4 w-4" />
+                    </a>
+                    {lead.estagio !== "Matriculado" && lead.estagio !== "Perdido" && (
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="ml-1 bg-emerald-600 hover:bg-emerald-700 h-8 text-xs"
+                        onClick={() => setLeadParaMatricular(lead)}
+                      >
+                        Matricular →
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -194,9 +251,14 @@ export default function CrmPage() {
               <CardDescription>De onde vêm seus novos alunos</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
+              {leads.length === 0 && (
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  Nenhum lead cadastrado para calcular as origens.
+                </div>
+              )}
               {Array.from(new Set(leads.map((l) => l.origem))).map((origem) => {
                 const qtd = leads.filter((l) => l.origem === origem).length;
-                const pct = (qtd / leads.length) * 100;
+                const pct = leads.length > 0 ? (qtd / leads.length) * 100 : 0;
                 return (
                   <div key={origem}>
                     <div className="flex items-center justify-between text-sm mb-1">
@@ -213,6 +275,60 @@ export default function CrmPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <NovoLeadModal aberto={modalAberto} onFechar={() => setModalAberto(false)} />
+
+      <MatricularLeadModal
+        lead={leadParaMatricular}
+        onFechar={() => setLeadParaMatricular(null)}
+        onMatriculado={async () => {
+          if (leadParaMatricular) {
+            await updateLead(leadParaMatricular.id, { estagio: "Matriculado" });
+          }
+          setLeadParaMatricular(null);
+        }}
+      />
+    </div>
+  );
+}
+
+function MatricularLeadModal({
+  lead,
+  onFechar,
+  onMatriculado,
+}: {
+  lead: { id: string; nomeResponsavel: string; nomeCrianca: string; idadeCrianca: number; serieInteresse: string; telefone: string; email: string } | null;
+  onFechar: () => void;
+  onMatriculado: () => Promise<void>;
+}) {
+  if (!lead) return null;
+  return (
+    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onFechar}>
+      <div className="w-full max-w-md bg-popover rounded-2xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="p-6 border-b">
+          <h2 className="font-bold text-lg">Converter lead em aluno</h2>
+          <p className="text-xs text-muted-foreground">
+            Esta ação apenas marca o lead como &quot;Matriculado&quot;. O cadastro do aluno continua sendo uma etapa separada.
+          </p>
+        </div>
+        <div className="p-6 space-y-3">
+          <div className="rounded-lg bg-muted/40 p-3 text-sm space-y-1">
+            <div><strong>Responsável:</strong> {lead.nomeResponsavel}</div>
+            <div><strong>Criança:</strong> {lead.nomeCrianca} ({lead.idadeCrianca} anos)</div>
+            <div><strong>Série interesse:</strong> {lead.serieInteresse}</div>
+            <div><strong>Contato:</strong> {lead.telefone} · {lead.email}</div>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            👉 Próximo passo: vá em <strong>Alunos → Nova matrícula</strong> e preencha a ficha completa.
+          </div>
+        </div>
+        <div className="border-t bg-muted/30 p-4 flex justify-end gap-2">
+          <Button variant="outline" onClick={onFechar}>Cancelar</Button>
+          <Button onClick={onMatriculado} className="bg-emerald-600 hover:bg-emerald-700">
+            Marcar como matriculado
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

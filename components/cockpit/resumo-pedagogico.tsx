@@ -10,20 +10,23 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { NIVEIS_PSICOGENESE, NivelPsicogenese } from "@/lib/types";
-import { pedagogicoPorAluno } from "@/lib/mock-data/pedagogico";
+import {
+  NIVEIS_PSICOGENESE,
+  type AvaliacaoPedagogica,
+  type NivelPsicogenese,
+} from "@/lib/types";
 
-function distribuicaoLeitura() {
+type AvaliacaoComLeitura = Pick<AvaliacaoPedagogica, "leituraNivel">;
+
+function distribuicaoLeitura(avaliacoesAtuais: readonly AvaliacaoComLeitura[]) {
   const contagem: Record<NivelPsicogenese, number> = {
     "Pré-silábico": 0,
     Silábico: 0,
     "Silábico-alfabético": 0,
     Alfabético: 0,
   };
-  for (const p of pedagogicoPorAluno) {
-    // Bim atual = 2º bimestre (junho/2026)
-    const atual = p.avaliacoes[1] ?? p.avaliacoes[p.avaliacoes.length - 1];
-    contagem[atual.leituraNivel]++;
+  for (const atual of avaliacoesAtuais) {
+    if (atual.leituraNivel !== null) contagem[atual.leituraNivel]++;
   }
   return contagem;
 }
@@ -35,8 +38,12 @@ const CORES_NIVEL: Record<NivelPsicogenese, string> = {
   Alfabético: "bg-emerald-500",
 };
 
-export function ResumoPedagogico() {
-  const dist = distribuicaoLeitura();
+export function ResumoPedagogico({
+  avaliacoesAtuais = [],
+}: {
+  avaliacoesAtuais?: readonly AvaliacaoComLeitura[];
+} = {}) {
+  const dist = distribuicaoLeitura(avaliacoesAtuais);
   const total = Object.values(dist).reduce((a, b) => a + b, 0);
 
   return (
@@ -61,6 +68,11 @@ export function ResumoPedagogico() {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {total === 0 && (
+          <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+            Nenhuma avaliação completa foi registrada para esta visão.
+          </p>
+        )}
         {NIVEIS_PSICOGENESE.map((nivel) => {
           const qtd = dist[nivel];
           const pct = total > 0 ? (qtd / total) * 100 : 0;

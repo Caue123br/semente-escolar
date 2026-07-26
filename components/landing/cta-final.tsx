@@ -10,7 +10,7 @@ export function LandingCtaFinal() {
   const [modal, setModal] = React.useState(false);
 
   return (
-    <section className="py-24 lg:py-32">
+    <section id="agendar-demonstracao" className="py-24 lg:py-32">
       <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-700 via-emerald-800 to-emerald-900 px-8 py-16 md:py-24 text-white shadow-2xl">
           <div
@@ -38,8 +38,7 @@ export function LandingCtaFinal() {
               </span>
             </h2>
             <p className="mt-5 text-lg text-emerald-100 max-w-2xl mx-auto">
-              Comece grátis. Sem cartão. Em 7 dias você já estará tomando decisões
-              melhores com mais clareza.
+              Registre uma preferência de horário para conhecer os fluxos reais e tirar dúvidas.
             </p>
 
             <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
@@ -48,8 +47,8 @@ export function LandingCtaFinal() {
                 asChild
                 className="h-12 px-8 text-base bg-white text-emerald-700 hover:bg-emerald-50 shadow-lg"
               >
-                <Link href="/cockpit">
-                  Ver demonstração ao vivo
+                <Link href="/login">
+                  Já tenho acesso
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
@@ -65,7 +64,7 @@ export function LandingCtaFinal() {
             </div>
 
             <p className="mt-6 text-xs text-emerald-200">
-              💚 14 dias grátis · sem cartão · cancele quando quiser
+              O pedido não confirma a agenda nem envia convite automaticamente.
             </p>
           </div>
         </div>

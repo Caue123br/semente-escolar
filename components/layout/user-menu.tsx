@@ -5,17 +5,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ChevronDown,
-  User,
   Settings,
   HelpCircle,
   LogOut,
   Sun,
   Moon,
   Monitor,
-  Sparkles,
   Crown,
   ClipboardList,
   GraduationCap,
+  Landmark,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { usePerfil } from "@/lib/perfil-context";
@@ -23,11 +22,12 @@ import { useTema, type Tema } from "@/lib/theme-context";
 import { initials, cn } from "@/lib/utils";
 import type { Perfil } from "@/lib/types";
 
-const PERFIS: { id: Perfil; nome: string; cargo: string; icone: React.ComponentType<{ className?: string }>; cor: string }[] = [
-  { id: "diretor", nome: "Renata Andrade", cargo: "Diretora / Dona", icone: Crown, cor: "text-amber-600" },
-  { id: "coordenador", nome: "Cláudio Vasconcelos", cargo: "Coordenador Pedagógico", icone: ClipboardList, cor: "text-blue-600" },
-  { id: "professor", nome: "Mariana Costa", cargo: "Professora — Jardim II / 1º Ano", icone: GraduationCap, cor: "text-emerald-600" },
-];
+const PERFIL_META: Record<Perfil, { cargo: string; icone: React.ComponentType<{ className?: string }>; cor: string }> = {
+  diretor: { cargo: "Direção", icone: Crown, cor: "text-amber-600" },
+  coordenador: { cargo: "Coordenação", icone: ClipboardList, cor: "text-blue-600" },
+  professor: { cargo: "Professor(a)", icone: GraduationCap, cor: "text-emerald-600" },
+  financeiro: { cargo: "Financeiro", icone: Landmark, cor: "text-violet-600" },
+};
 
 const TEMAS: { id: Tema; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "light", label: "Claro", icon: Sun },
@@ -37,7 +37,7 @@ const TEMAS: { id: Tema; label: string; icon: React.ComponentType<{ className?: 
 
 export function UserMenu() {
   const router = useRouter();
-  const { perfil, setPerfil } = usePerfil();
+  const { perfil, nome } = usePerfil();
   const { tema, setTema } = useTema();
   const [aberto, setAberto] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
@@ -50,7 +50,7 @@ export function UserMenu() {
     return () => document.removeEventListener("mousedown", onClickFora);
   }, []);
 
-  const atual = PERFIS.find((p) => p.id === perfil)!;
+  const atual = PERFIL_META[perfil];
   const Icon = atual.icone;
 
   return (
@@ -61,13 +61,13 @@ export function UserMenu() {
       >
         <Avatar className="h-8 w-8">
           <AvatarFallback className="bg-primary/15 text-primary text-xs font-semibold">
-            {initials(atual.nome)}
+            {initials(nome)}
           </AvatarFallback>
         </Avatar>
         <div className="hidden text-left sm:block">
           <div className="flex items-center gap-1.5 text-sm font-semibold leading-tight">
             <Icon className={`h-3.5 w-3.5 ${atual.cor}`} />
-            {atual.nome.split(" ")[0]}
+            {nome.split(" ")[0]}
           </div>
           <div className="text-xs text-muted-foreground leading-tight truncate max-w-[180px]">
             {atual.cargo}
@@ -83,11 +83,11 @@ export function UserMenu() {
             <div className="flex items-center gap-3">
               <Avatar className="h-12 w-12">
                 <AvatarFallback className="bg-emerald-600 text-white font-semibold">
-                  {initials(atual.nome)}
+                  {initials(nome)}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
-                <div className="font-semibold truncate">{atual.nome}</div>
+                <div className="font-semibold truncate">{nome}</div>
                 <div className="text-xs text-muted-foreground inline-flex items-center gap-1">
                   <Icon className={`h-3 w-3 ${atual.cor}`} />
                   {atual.cargo}
@@ -96,41 +96,12 @@ export function UserMenu() {
             </div>
           </div>
 
-          {/* Trocar perfil (demo) */}
-          <div className="p-2 border-b">
-            <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <Sparkles className="h-3 w-3 text-emerald-600" />
-              Simular perfil
-            </div>
-            <div className="space-y-0.5 mt-1">
-              {PERFIS.map((p) => {
-                const Ic = p.icone;
-                const ativo = p.id === perfil;
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => setPerfil(p.id)}
-                    className={cn(
-                      "w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
-                      ativo ? "bg-accent" : "hover:bg-accent/50"
-                    )}
-                  >
-                    <Ic className={cn("h-3.5 w-3.5", p.cor)} />
-                    <span className="flex-1 text-left truncate">{p.nome}</span>
-                    {ativo && (
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
           {/* Ações */}
           <div className="p-2 border-b space-y-0.5">
-            <MenuItem icon={User} label="Meu perfil" href="/configuracoes" onClick={() => setAberto(false)} />
-            <MenuItem icon={Settings} label="Configurações" href="/configuracoes" onClick={() => setAberto(false)} />
-            <MenuItem icon={HelpCircle} label="Central de ajuda" onClick={() => setAberto(false)} />
+            {perfil === "diretor" && (
+              <MenuItem icon={Settings} label="Configurações" href="/configuracoes" onClick={() => setAberto(false)} />
+            )}
+            <MenuItem icon={HelpCircle} label="Central de ajuda" href="/ajuda" onClick={() => setAberto(false)} />
           </div>
 
           {/* Tema */}
@@ -164,7 +135,11 @@ export function UserMenu() {
           {/* Logout */}
           <div className="p-2">
             <button
-              onClick={() => router.push("/login")}
+              onClick={async () => {
+                await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
+                router.replace("/login");
+                router.refresh();
+              }}
               className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-rose-600 hover:bg-rose-50 transition-colors"
             >
               <LogOut className="h-4 w-4" />

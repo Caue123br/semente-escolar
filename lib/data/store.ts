@@ -1,27 +1,31 @@
 "use client";
 
 /**
- * Data store híbrido com 3 níveis de backend:
- * 1. Supabase (se configurado em .env.local)
- * 2. SQLite via API routes (modo padrão — persiste no servidor)
- * 3. localStorage (fallback se API offline)
- *
- * O componente continua usando useEntidade("alunos") normalmente.
+ * Store cliente que conversa exclusivamente com as rotas /api.
+ * Dados escolares nunca são persistidos no navegador como fallback.
  */
 
 import * as React from "react";
-import { alunos as alunosSeed } from "@/lib/mock-data/alunos";
-import { turmas as turmasSeed } from "@/lib/mock-data/turmas";
-import { mensalidadesJunho as mensalidadesSeed } from "@/lib/mock-data/financeiro";
-import { vendas as vendasSeed } from "@/lib/mock-data/vendas";
-import { despesas as despesasSeed } from "@/lib/mock-data/despesas";
-import { itensEstoque as estoqueSeed } from "@/lib/mock-data/estoque";
-import { eventos as eventosSeed } from "@/lib/mock-data/calendario";
-import { funcionarios as funcionariosSeed } from "@/lib/mock-data/rh";
-import type { Aluno, Mensalidade, Venda, ItemEstoque } from "@/lib/types";
+import { formatarErro } from "@/lib/format-error";
+import { useToast } from "@/lib/toast";
+import type {
+  Aluno,
+  AvaliacaoPedagogica,
+  Mensalidade,
+  Venda,
+  ItemEstoque,
+  Turma,
+  KanbanCard,
+  NotaFiscal,
+} from "@/lib/types";
 import type { Despesa } from "@/lib/mock-data/despesas";
 import type { EventoCalendario } from "@/lib/mock-data/calendario";
 import type { Funcionario } from "@/lib/mock-data/rh";
+import type { Livro, Emprestimo } from "@/lib/mock-data/biblioteca";
+import type { BebeBercario, RegistroBercario } from "@/lib/mock-data/bercario";
+import type { DiaCardapio } from "@/lib/mock-data/cardapio";
+import type { RotaTransporte } from "@/lib/mock-data/transporte";
+import type { Lead } from "@/lib/mock-data/crm";
 
 const STORAGE_PREFIX = "semente:data:";
 
@@ -38,9 +42,39 @@ export interface MuralPost {
   fixado: boolean;
 }
 
+export interface Reserva {
+  id: string;
+  espaco: string;
+  data: string;
+  horaInicio?: string;
+  horaFim?: string;
+  responsavel?: string;
+  motivo?: string;
+  status: string;
+}
+
+export interface ItemPatrimonio {
+  id: string;
+  item: string;
+  categoria: string;
+  local: string;
+  valor: number;
+  dataCompra: string;
+  estado: string;
+  responsavel: string;
+}
+
+export interface RegistroFrequencia {
+  id: string;
+  alunoId: string;
+  data: string;
+  presente: boolean;
+  justificativa?: string;
+}
+
 type Entidades = {
   alunos: Aluno[];
-  turmas: typeof turmasSeed;
+  turmas: Turma[];
   mensalidades: Mensalidade[];
   despesas: Despesa[];
   vendas: Venda[];
@@ -48,92 +82,72 @@ type Entidades = {
   eventos: EventoCalendario[];
   funcionarios: Funcionario[];
   muralPosts: MuralPost[];
+  kanban: KanbanCard[];
+  bibliotecaLivros: Livro[];
+  bibliotecaEmprestimos: Emprestimo[];
+  bercarioBebes: BebeBercario[];
+  bercarioRegistros: RegistroBercario[];
+  cardapio: DiaCardapio[];
+  reservas: Reserva[];
+  transporte: RotaTransporte[];
+  patrimonio: ItemPatrimonio[];
+  crm: Lead[];
+  notasFiscais: NotaFiscal[];
+  frequencia: RegistroFrequencia[];
+  avaliacoes: AvaliacaoPedagogica[];
 };
 
 // Quais entidades têm endpoint /api/<chave>/
 const COM_API: Partial<Record<keyof Entidades, string>> = {
   alunos: "/api/alunos",
+  turmas: "/api/turmas",
+  mensalidades: "/api/mensalidades",
+  despesas: "/api/despesas",
+  vendas: "/api/vendas",
+  estoque: "/api/estoque",
   eventos: "/api/eventos",
+  funcionarios: "/api/funcionarios",
   muralPosts: "/api/mural-posts",
+  kanban: "/api/kanban",
+  bibliotecaLivros: "/api/biblioteca-livros",
+  bibliotecaEmprestimos: "/api/biblioteca-emprestimos",
+  bercarioBebes: "/api/bercario-bebes",
+  bercarioRegistros: "/api/bercario-registros",
+  cardapio: "/api/cardapio",
+  reservas: "/api/reservas",
+  transporte: "/api/transporte",
+  patrimonio: "/api/patrimonio",
+  crm: "/api/crm",
+  notasFiscais: "/api/notas-fiscais",
+  frequencia: "/api/frequencia",
+  avaliacoes: "/api/avaliacoes",
 };
-
-const muralPostsSeed: MuralPost[] = [
-  {
-    id: "p1",
-    autor: "Renata Andrade",
-    cargo: "Direção",
-    tipo: "Importante",
-    fixado: true,
-    titulo: "Festa Junina 2026 — Confirmem presença!",
-    conteudo:
-      "Famílias, nossa Festa Junina será dia 22/06 (sábado) das 10h às 16h. Teremos quadrilha das crianças, barracas de comidas típicas e muitas brincadeiras. Confirmem presença pelo WhatsApp.",
-    data: "2026-06-08 14:30",
-    likes: 47,
-    comentarios: 12,
-  },
-  {
-    id: "p2",
-    autor: "Cláudio Vasconcelos",
-    cargo: "Coordenação",
-    tipo: "Pedagógico",
-    fixado: false,
-    titulo: "Encerramento do 2º bimestre — boletins disponíveis em 30/06",
-    conteudo:
-      "Pais e mães, os boletins do 2º bimestre estarão disponíveis no Portal dos Pais a partir do dia 30/06. As reuniões individuais serão agendadas via WhatsApp pelas professoras.",
-    data: "2026-06-07 10:15",
-    likes: 28,
-    comentarios: 5,
-  },
-  {
-    id: "p3",
-    autor: "Mariana Costa",
-    cargo: "Profa. Jardim II - A",
-    tipo: "Atividade",
-    fixado: false,
-    titulo: "Projeto 'Animais da Fazenda' começa semana que vem",
-    conteudo:
-      "Famílias do Jardim II - A, vamos iniciar nosso projeto sobre animais da fazenda. Por favor, enviem fotos das crianças com animais (se tiverem) para o nosso painel coletivo.",
-    data: "2026-06-07 18:45",
-    likes: 19,
-    comentarios: 8,
-  },
-];
-
-const SEEDS: Entidades = {
-  alunos: alunosSeed,
-  turmas: turmasSeed,
-  mensalidades: mensalidadesSeed,
-  despesas: despesasSeed,
-  vendas: vendasSeed,
-  estoque: estoqueSeed,
-  eventos: eventosSeed,
-  funcionarios: funcionariosSeed,
-  muralPosts: muralPostsSeed,
-};
-
-// ----------- localStorage helpers -----------
-function readLocal<K extends keyof Entidades>(chave: K): Entidades[K] {
-  if (typeof window === "undefined") return SEEDS[chave];
-  try {
-    const raw = window.localStorage.getItem(STORAGE_PREFIX + chave);
-    if (raw) return JSON.parse(raw) as Entidades[K];
-  } catch {}
-  writeLocal(chave, SEEDS[chave]);
-  return SEEDS[chave];
-}
-
-function writeLocal<K extends keyof Entidades>(chave: K, valor: Entidades[K]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_PREFIX + chave, JSON.stringify(valor));
-  window.dispatchEvent(new CustomEvent(`semente:changed:${chave}`));
-}
 
 // ----------- API helpers -----------
+type ApiPayload = {
+  error?: unknown;
+  items?: unknown;
+  [key: string]: unknown;
+};
+
+async function lerResposta(r: Response): Promise<ApiPayload> {
+  const data = (await r.json().catch(() => ({}))) as ApiPayload;
+  if (!r.ok) {
+    const mensagem = typeof data.error === "string"
+      ? data.error
+      : `O servidor respondeu com status ${r.status}`;
+    throw new Error(mensagem);
+  }
+  return data;
+}
+
 async function fetchApi<T>(url: string): Promise<T[]> {
   const r = await fetch(url, { cache: "no-store" });
-  if (!r.ok) throw new Error(`API ${url} retornou ${r.status}`);
-  const data = (await r.json()) as { items: T[] };
-  return data.items;
+  const data = await lerResposta(r);
+  if (!Array.isArray(data.items)) {
+    throw new Error("O servidor retornou uma resposta inválida");
+  }
+  return data.items as T[];
 }
 
 async function postApi(url: string, body: unknown) {
@@ -142,14 +156,12 @@ async function postApi(url: string, body: unknown) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!r.ok) throw new Error(`POST ${url} retornou ${r.status}`);
-  return r.json();
+  return lerResposta(r);
 }
 
 async function deleteApi(url: string) {
   const r = await fetch(url, { method: "DELETE" });
-  if (!r.ok) throw new Error(`DELETE ${url} retornou ${r.status}`);
-  return r.json();
+  return lerResposta(r);
 }
 
 async function patchApi(url: string, body: unknown) {
@@ -158,116 +170,128 @@ async function patchApi(url: string, body: unknown) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!r.ok) throw new Error(`PATCH ${url} retornou ${r.status}`);
-  return r.json();
+  return lerResposta(r);
 }
 
 // ----------- API pública (CRUD) -----------
-export function useEntidade<K extends keyof Entidades>(chave: K): {
+export function useEntidade<K extends keyof Entidades>(
+  chave: K,
+  options: { habilitado?: boolean } = {}
+): {
   items: Entidades[K];
   add: (item: Entidades[K][number]) => Promise<void>;
   update: (id: string, patch: Partial<Entidades[K][number]>) => Promise<void>;
   remove: (id: string) => Promise<void>;
   reset: () => void;
   carregando: boolean;
+  erro: string | null;
 } {
-  const [items, setItems] = React.useState<Entidades[K]>(() => SEEDS[chave]);
-  const [carregando, setCarregando] = React.useState(true);
-  const apiUrl = COM_API[chave];
+  const habilitado = options.habilitado ?? true;
+  const [items, setItems] = React.useState<Entidades[K]>([] as unknown as Entidades[K]);
+  const [carregando, setCarregando] = React.useState(habilitado);
+  const [erro, setErro] = React.useState<string | null>(null);
+  const apiUrl = habilitado ? COM_API[chave] : undefined;
+  const toast = useToast();
+  const versaoRequisicao = React.useRef(0);
 
   const carregar = React.useCallback(async () => {
+    const versao = ++versaoRequisicao.current;
+    if (!habilitado) {
+      setItems([] as unknown as Entidades[K]);
+      setErro(null);
+      setCarregando(false);
+      return;
+    }
+    setCarregando(true);
     if (apiUrl) {
       try {
         const data = await fetchApi<Entidades[K][number]>(apiUrl);
+        if (versao !== versaoRequisicao.current) return;
         setItems(data as Entidades[K]);
-        writeLocal(chave, data as Entidades[K]); // cache local
+        setErro(null);
         setCarregando(false);
         return;
       } catch (e) {
-        console.warn(`[Semente] API offline para ${chave}, usando localStorage`, e);
+        if (versao !== versaoRequisicao.current) return;
+        console.warn(`[Escola Modelo] API indisponível para ${chave}`, e);
+        setErro(formatarErro(e));
       }
     }
-    setItems(readLocal(chave));
-    setCarregando(false);
-  }, [apiUrl, chave]);
+    if (versao === versaoRequisicao.current) setCarregando(false);
+  }, [apiUrl, chave, habilitado]);
 
   React.useEffect(() => {
-    carregar();
+    void carregar();
+    if (!habilitado) {
+      return () => {
+        versaoRequisicao.current += 1;
+      };
+    }
     const handler = () => carregar();
     window.addEventListener(`semente:changed:${chave}`, handler);
-    return () =>
+    return () => {
+      versaoRequisicao.current += 1;
       window.removeEventListener(`semente:changed:${chave}`, handler);
-  }, [chave, carregar]);
+    };
+  }, [chave, carregar, habilitado]);
 
   const add = async (item: Entidades[K][number]) => {
-    // Otimista: atualiza UI primeiro
-    setItems((prev) => [item, ...(prev as unknown[])] as Entidades[K]);
-    if (apiUrl) {
-      try {
-        await postApi(apiUrl, item);
-        window.dispatchEvent(new CustomEvent(`semente:changed:${chave}`));
-        return;
-      } catch (e) {
-        console.warn(`[Semente] POST falhou, salvando localmente`, e);
+    if (!apiUrl) return;
+    try {
+      const resposta = await postApi(apiUrl, item);
+      if (resposta.item && typeof resposta.item === "object") {
+        setItems((anteriores) => [
+          resposta.item as Entidades[K][number],
+          ...(anteriores as unknown[]),
+        ] as Entidades[K]);
       }
+      window.dispatchEvent(new CustomEvent(`semente:changed:${chave}`));
+    } catch (e) {
+      console.warn(`[Escola Modelo] POST falhou`, e);
+      toast.error("Não foi possível salvar", formatarErro(e));
+      throw e;
     }
-    const atual = readLocal(chave);
-    writeLocal(chave, [item, ...(atual as unknown[])] as Entidades[K]);
   };
 
   const update = async (id: string, patch: Partial<Entidades[K][number]>) => {
-    setItems((prev) =>
-      (prev as Array<{ id: string }>).map((it) =>
-        it.id === id ? { ...it, ...patch } : it
-      ) as Entidades[K]
-    );
-    if (apiUrl) {
-      try {
-        await patchApi(`${apiUrl}/${id}`, patch);
-        return;
-      } catch (e) {
-        console.warn(`[Semente] PATCH falhou`, e);
-      }
+    if (!apiUrl) return;
+    try {
+      await patchApi(`${apiUrl}/${id}`, patch);
+      window.dispatchEvent(new CustomEvent(`semente:changed:${chave}`));
+    } catch (e) {
+      console.warn(`[Escola Modelo] PATCH falhou`, e);
+      toast.error("Não foi possível salvar a alteração", formatarErro(e));
+      throw e;
     }
-    const atual = readLocal(chave) as Array<{ id: string }>;
-    const novo = atual.map((it) =>
-      it.id === id ? { ...it, ...patch } : it
-    ) as Entidades[K];
-    writeLocal(chave, novo);
   };
 
   const remove = async (id: string) => {
-    setItems((prev) =>
-      (prev as Array<{ id: string }>).filter((it) => it.id !== id) as Entidades[K]
-    );
-    if (apiUrl) {
-      try {
-        await deleteApi(`${apiUrl}/${id}`);
-        return;
-      } catch (e) {
-        console.warn(`[Semente] DELETE falhou`, e);
-      }
+    if (!apiUrl) return;
+    try {
+      await deleteApi(`${apiUrl}/${id}`);
+      window.dispatchEvent(new CustomEvent(`semente:changed:${chave}`));
+    } catch (e) {
+      console.warn(`[Escola Modelo] DELETE falhou`, e);
+      toast.error("Não foi possível remover", formatarErro(e));
+      throw e;
     }
-    const atual = readLocal(chave) as Array<{ id: string }>;
-    writeLocal(chave, atual.filter((it) => it.id !== id) as Entidades[K]);
   };
 
-  const reset = () => writeLocal(chave, SEEDS[chave]);
+  const reset = () => void carregar();
 
-  return { items, add, update, remove, reset, carregando };
+  return { items, add, update, remove, reset, carregando, erro };
 }
 
-export function getBackendMode(): "supabase" | "sqlite" | "localStorage" {
-  // Se chegou aqui sem Supabase, e API responder, é sqlite
-  return "sqlite";
+export function getBackendMode(): "postgresql" {
+  return "postgresql";
 }
 
-/** Apaga TUDO do localStorage do Semente (útil pra reset da demo) */
+/** Remove apenas caches legados que versões antigas gravavam no navegador. */
 export function resetTudo() {
   if (typeof window === "undefined") return;
-  const chaves = Object.keys(SEEDS) as Array<keyof Entidades>;
-  for (const k of chaves) {
-    window.localStorage.removeItem(STORAGE_PREFIX + k);
+  for (let i = window.localStorage.length - 1; i >= 0; i -= 1) {
+    const key = window.localStorage.key(i);
+    if (key?.startsWith(STORAGE_PREFIX)) window.localStorage.removeItem(key);
   }
   window.location.reload();
 }

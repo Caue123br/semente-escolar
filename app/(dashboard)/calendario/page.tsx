@@ -46,10 +46,32 @@ const NOMES_MES = [
 ];
 
 export default function CalendarioPage() {
-  const [mes, setMes] = React.useState(5); // junho
-  const ano = 2026;
+  const agora = new Date();
+  const [mes, setMes] = React.useState(agora.getMonth());
+  const [ano, setAno] = React.useState(agora.getFullYear());
   const [modalAberto, setModalAberto] = React.useState(false);
   const { items: eventos } = useEntidade("eventos");
+
+  const proximoMes = () => {
+    if (mes === 11) {
+      setMes(0);
+      setAno(ano + 1);
+    } else {
+      setMes(mes + 1);
+    }
+  };
+  const mesAnterior = () => {
+    if (mes === 0) {
+      setMes(11);
+      setAno(ano - 1);
+    } else {
+      setMes(mes - 1);
+    }
+  };
+  const irHoje = () => {
+    setMes(agora.getMonth());
+    setAno(agora.getFullYear());
+  };
 
   const primeiroDia = new Date(ano, mes, 1).getDay();
   const ultimoDia = new Date(ano, mes + 1, 0).getDate();
@@ -97,18 +119,13 @@ export default function CalendarioPage() {
                   {NOMES_MES[mes]} {ano}
                 </CardTitle>
                 <div className="flex items-center gap-1">
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    onClick={() => setMes((m) => (m > 0 ? m - 1 : 11))}
-                  >
+                  <Button size="icon" variant="outline" onClick={mesAnterior}>
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    onClick={() => setMes((m) => (m < 11 ? m + 1 : 0))}
-                  >
+                  <Button size="sm" variant="outline" onClick={irHoje} className="text-xs h-9">
+                    Hoje
+                  </Button>
+                  <Button size="icon" variant="outline" onClick={proximoMes}>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
@@ -131,7 +148,10 @@ export default function CalendarioPage() {
                     dia
                   ).padStart(2, "0")}`;
                   const eventosDia = eventos.filter((e) => e.data === dataStr);
-                  const hoje = dia === 9 && mes === 5;
+                  const hoje =
+                    dia === agora.getDate() &&
+                    mes === agora.getMonth() &&
+                    ano === agora.getFullYear();
                   return (
                     <div
                       key={i}

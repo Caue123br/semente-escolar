@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getDb, initDb } from "@/lib/db/sqlite";
+import { getDatabase } from "@/lib/db/postgres";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const COLS: Record<string, string> = {
+const MAPA: Record<string, string> = {
   data: "data",
   itemNome: "item_nome",
   tipo: "tipo",
@@ -17,41 +17,25 @@ const COLS: Record<string, string> = {
   notaFiscal: "nota_fiscal",
 };
 
-export async function DELETE(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  await initDb();
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const db = getDb();
-  await db.execute({ sql: "DELETE FROM vendas WHERE id = ?", args: [id] });
+  const sb = getDatabase();
+  const { error } = await sb.from("vendas").delete().eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
 
-export async function PATCH(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  await initDb();
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const patch = await req.json();
-  const db = getDb();
-
-  const setClauses: string[] = [];
-  const args: (string | number | null)[] = [];
-
+  const update: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(patch)) {
-    const col = COLS[k];
-    if (!col) continue;
-    setClauses.push(`${col} = ?`);
-    args.push(v as string | number | null);
+    const col = MAPA[k];
+    if (col) update[col] = v;
   }
-
-  if (setClauses.length === 0) return NextResponse.json({ ok: true });
-  args.push(id);
-  await db.execute({
-    sql: `UPDATE vendas SET ${setClauses.join(", ")} WHERE id = ?`,
-    args,
-  });
+  if (Object.keys(update).length === 0) return NextResponse.json({ ok: true });
+  const sb = getDatabase();
+  const { error } = await sb.from("vendas").update(update).eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

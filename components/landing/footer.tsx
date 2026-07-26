@@ -1,48 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { Sprout, Instagram, Linkedin, Youtube, Mail, Phone } from "lucide-react";
+import { Sprout, Mail } from "lucide-react";
 
 const grupos = [
   {
     titulo: "Produto",
     links: [
-      { l: "Cockpit", h: "/cockpit" },
-      { l: "Financeiro", h: "/financeiro" },
-      { l: "Pedagógico", h: "/pedagogico" },
-      { l: "WhatsApp", h: "/whatsapp" },
-      { l: "CRM Captação", h: "/crm" },
+      { l: "Recursos", h: "/#modulos" },
+      { l: "Diferencial", h: "/#diferencial" },
+      { l: "Para quem", h: "/#para-quem" },
       { l: "Ver todos os módulos", h: "#modulos" },
     ],
   },
   {
-    titulo: "Empresa",
+    titulo: "Acesso",
     links: [
-      { l: "Sobre a Semente", h: "#" },
-      { l: "Carreira", h: "#" },
-      { l: "Blog", h: "#" },
-      { l: "Imprensa", h: "#" },
-      { l: "Parcerias", h: "#" },
-    ],
-  },
-  {
-    titulo: "Recursos",
-    links: [
-      { l: "Central de ajuda", h: "#" },
-      { l: "Documentação", h: "#" },
-      { l: "API", h: "#" },
-      { l: "Webinars", h: "#" },
-      { l: "Comunidade", h: "#" },
+      { l: "Entrar no sistema", h: "/login" },
+      { l: "Solicitar demonstração", h: "/#agendar-demonstracao" },
+      { l: "Perguntas frequentes", h: "/#faq" },
     ],
   },
   {
     titulo: "Legal",
     links: [
-      { l: "Termos de uso", h: "#" },
-      { l: "Política de privacidade", h: "#" },
-      { l: "LGPD", h: "/lgpd" },
-      { l: "Cookies", h: "#" },
-      { l: "Status do sistema", h: "#" },
+      { l: "Política de privacidade", h: "/privacidade" },
     ],
   },
 ];
@@ -74,21 +56,6 @@ export function LandingFooter() {
               <a href="mailto:oi@semente.com.br" className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
                 <Mail className="h-4 w-4" /> oi@semente.com.br
               </a>
-              <a href="tel:+551133334444" className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
-                <Phone className="h-4 w-4" /> (11) 3333-4444
-              </a>
-            </div>
-
-            <div className="mt-6 flex gap-3">
-              <a href="#" className="h-9 w-9 rounded-full bg-card border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-emerald-500 transition-colors" aria-label="Instagram">
-                <Instagram className="h-4 w-4" />
-              </a>
-              <a href="#" className="h-9 w-9 rounded-full bg-card border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-emerald-500 transition-colors" aria-label="LinkedIn">
-                <Linkedin className="h-4 w-4" />
-              </a>
-              <a href="#" className="h-9 w-9 rounded-full bg-card border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-emerald-500 transition-colors" aria-label="YouTube">
-                <Youtube className="h-4 w-4" />
-              </a>
             </div>
           </div>
 
@@ -113,11 +80,11 @@ export function LandingFooter() {
         </div>
 
         <div className="mt-14 pt-8 border-t flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
-          <div>© 2026 Semente Tecnologia LTDA · CNPJ 00.000.000/0001-00 · São Paulo, Brasil</div>
+          <div>© 2026 Semente · Sistema de gestão escolar</div>
           <div className="flex items-center gap-4">
             <span>🇧🇷 Português (BR)</span>
             <span>·</span>
-            <span>Operando 100% em conformidade com a LGPD</span>
+            <span>Privacidade e responsabilidades documentadas na implantação</span>
           </div>
         </div>
       </div>

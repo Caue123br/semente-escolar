@@ -19,7 +19,7 @@ const features = [
     grupo: "Diferenciais Semente",
     itens: [
       { f: "Cockpit unificado financeiro + pedagógico", v: ["yes", "no", "no", "no", "no"] },
-      { f: "Insight do dia com IA (cruzamento de dados)", v: ["yes", "no", "no", "no", "no"] },
+      { f: "Insight calculado a partir dos dados", v: ["yes", "no", "no", "no", "no"] },
       { f: "Alerta automático de estagnação", v: ["yes", "no", "partial", "no", "no"] },
       { f: "Antes vs Depois — medindo impacto real", v: ["yes", "no", "no", "no", "no"] },
     ],
@@ -28,9 +28,9 @@ const features = [
     grupo: "Financeiro",
     itens: [
       { f: "Régua de inadimplência com WhatsApp", v: ["yes", "partial", "yes", "partial", "no"] },
-      { f: "Conciliação bancária automática", v: ["yes", "no", "no", "no", "no"] },
-      { f: "NFS-e automática", v: ["yes", "yes", "no", "yes", "no"] },
-      { f: "Pix QR dinâmico", v: ["yes", "no", "yes", "partial", "no"] },
+      { f: "Conciliação interna dos registros", v: ["yes", "no", "no", "no", "manual"] },
+      { f: "Controle fiscal para conferência externa", v: ["yes", "partial", "no", "partial", "manual"] },
+      { f: "Registro manual de pagamentos Pix", v: ["yes", "partial", "partial", "partial", "manual"] },
       { f: "DRE e fluxo de caixa", v: ["yes", "yes", "no", "partial", "manual"] },
     ],
   },
@@ -47,7 +47,7 @@ const features = [
   {
     grupo: "Operacional",
     itens: [
-      { f: "WhatsApp Business oficial integrado", v: ["yes", "no", "yes", "no", "no"] },
+      { f: "Rascunhos e abertura manual do WhatsApp", v: ["yes", "partial", "partial", "partial", "manual"] },
       { f: "Kanban por turma com drag-and-drop", v: ["yes", "no", "no", "no", "no"] },
       { f: "Cardápio + restrições alimentares", v: ["yes", "no", "partial", "no", "no"] },
       { f: "Gestão de transporte escolar", v: ["yes", "no", "no", "no", "no"] },
@@ -74,10 +74,10 @@ const features = [
   {
     grupo: "Compliance",
     itens: [
-      { f: "100% LGPD by design", v: ["yes", "yes", "yes", "partial", "no"] },
-      { f: "Log de auditoria detalhado", v: ["yes", "partial", "no", "no", "no"] },
-      { f: "Backup automático diário", v: ["yes", "yes", "yes", "yes", "no"] },
-      { f: "Servidores no Brasil (LGPD)", v: ["yes", "yes", "yes", "partial", "n/a"] },
+      { f: "Controles de acesso e solicitações LGPD", v: ["yes", "partial", "partial", "partial", "no"] },
+      { f: "Trilha de auditoria dos fluxos instrumentados", v: ["yes", "partial", "no", "no", "no"] },
+      { f: "Exportação operacional em JSON", v: ["yes", "partial", "partial", "partial", "manual"] },
+      { f: "Infraestrutura definida na implantação", v: ["manual", "manual", "manual", "manual", "n/a"] },
     ],
   },
 ];
@@ -118,14 +118,13 @@ export default function ComparativoPage() {
         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
           <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 text-emerald-700 px-3 py-1 text-xs font-semibold mb-4">
             <Sparkles className="h-3 w-3" />
-            Comparativo honesto
+            Matriz orientativa
           </div>
           <h1 className="text-3xl md:text-5xl font-bold tracking-tight">
             Semente vs <span className="text-muted-foreground">outros sistemas</span>
           </h1>
           <p className="mt-4 text-muted-foreground text-lg">
-            Comparação detalhada com Sponte, ClassApp, EduConnect e planilhas Excel.
-            <br />Sem maquiagem.
+            A coluna Semente reflete esta instalação. Recursos e planos de outros fornecedores mudam com o tempo e devem ser confirmados diretamente antes de qualquer decisão.
           </p>
         </div>
       </section>

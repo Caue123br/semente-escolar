@@ -54,7 +54,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const toast: ToastContextValue["toast"] = (t) => {
     const id = `toast-${Date.now()}-${Math.random()}`;
-    const duracao = t.duracao ?? 5000;
+    // Erros e ações com descrição importam mais — duração maior
+    const padrao = t.tipo === "error" ? 8000 : t.desc && t.desc.length > 30 ? 6500 : 5000;
+    const duracao = t.duracao ?? padrao;
     setToasts((prev) => [...prev, { ...t, id }]);
     setTimeout(() => remover(id), duracao);
   };
