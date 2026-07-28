@@ -12,6 +12,7 @@ import type {
   Aluno,
   AvaliacaoPedagogica,
   Mensalidade,
+  Cobranca,
   Venda,
   ItemEstoque,
   Turma,
@@ -76,6 +77,7 @@ type Entidades = {
   alunos: Aluno[];
   turmas: Turma[];
   mensalidades: Mensalidade[];
+  cobrancas: Cobranca[];
   despesas: Despesa[];
   vendas: Venda[];
   estoque: ItemEstoque[];
@@ -102,6 +104,7 @@ const COM_API: Partial<Record<keyof Entidades, string>> = {
   alunos: "/api/alunos",
   turmas: "/api/turmas",
   mensalidades: "/api/mensalidades",
+  cobrancas: "/api/cobrancas",
   despesas: "/api/despesas",
   vendas: "/api/vendas",
   estoque: "/api/estoque",

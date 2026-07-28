@@ -37,6 +37,14 @@ const MAPA: Record<string, string> = {
   religiao: "religiao",
   escolaAnteriorNome: "escola_anterior_nome",
   escolaAnteriorTempo: "escola_anterior_tempo",
+  // Plano financeiro
+  matriculaTaxa: "matricula_taxa",
+  matriculaForma: "matricula_forma",
+  matriculaModalidade: "matricula_modalidade",
+  matriculaParcelas: "matricula_parcelas",
+  mensalidadeValor: "mensalidade_valor",
+  mensalidadePeriodicidade: "mensalidade_periodicidade",
+  diaVencimento: "dia_vencimento",
 };
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {

@@ -120,7 +120,18 @@ export interface Aluno {
   escolaAnteriorTempo?: string;
   pessoasAutorizadas?: PessoaAutorizada[];
   fichaSaude?: FichaSaude;
+
+  // Plano financeiro (ficha financeira do aluno) — todos opcionais
+  matriculaTaxa?: number;
+  matriculaForma?: FormaPagamento;
+  matriculaModalidade?: "avista" | "parcelado";
+  matriculaParcelas?: number;
+  mensalidadeValor?: number;
+  mensalidadePeriodicidade?: "mensal" | "anual";
+  diaVencimento?: number;
 }
+
+export type FormaPagamento = "Pix" | "Boleto" | "Cartão" | "Dinheiro";
 
 // ----- Pedagógico -----
 // Escala de psicogênese da escrita (Emília Ferreiro)
@@ -192,6 +203,24 @@ export interface Mensalidade {
   status: StatusMensalidade;
   diasAtraso: number;
   formaPagamento?: "Pix" | "Boleto" | "Cartão" | "Dinheiro";
+}
+
+// ----- Ficha financeira do aluno (cobranças geradas do plano) -----
+export type StatusCobranca = "Pendente" | "Pago" | "Atrasada";
+
+export interface Cobranca {
+  id: string;
+  alunoId: string;
+  tipo: "matricula" | "mensalidade";
+  descricao: string;
+  valor: number;
+  vencimento: string; // YYYY-MM-DD
+  valorPago?: number;
+  dataPagamento?: string;
+  status: StatusCobranca;
+  formaPagamento?: FormaPagamento;
+  parcelaNum?: number;
+  parcelaTotal?: number;
 }
 
 export interface FaturamentoMensal {

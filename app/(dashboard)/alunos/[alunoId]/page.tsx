@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useEntidade } from "@/lib/data/store";
 import { UploadFotoAluno } from "@/components/alunos/upload-foto";
+import { FichaFinanceiraAluno } from "@/components/financeiro/ficha-financeira-aluno";
 import { formatDateBR, formatBRL } from "@/lib/utils";
 import type { FichaSaude } from "@/lib/types";
 
@@ -235,11 +236,12 @@ export default function AlunoDetalhePage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="financeiro">
+        <TabsContent value="financeiro" className="space-y-6">
+          <FichaFinanceiraAluno aluno={aluno} />
           <Card>
             <CardHeader>
-              <CardTitle>Mensalidades</CardTitle>
-              <CardDescription>Histórico financeiro do aluno</CardDescription>
+              <CardTitle>Mensalidades (módulo Financeiro)</CardTitle>
+              <CardDescription>Registros da aba Financeiro geral — separado do plano acima</CardDescription>
             </CardHeader>
             <CardContent>
               {mensalidadesAluno.length === 0 ? (

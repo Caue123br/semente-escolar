@@ -7,6 +7,7 @@ import type {
   SubcategoriaVenda,
   TipoVenda,
   Mensalidade,
+  Cobranca,
   Turma,
   SerieEnum,
   Turno,
@@ -60,6 +61,31 @@ export function rowToAluno(r: Row): Aluno {
     escolaAnteriorTempo: r.escola_anterior_tempo ? str(r.escola_anterior_tempo) : undefined,
     pessoasAutorizadas: Array.isArray(r.pessoas_autorizadas_json) ? r.pessoas_autorizadas_json as Aluno["pessoasAutorizadas"] : undefined,
     fichaSaude: r.ficha_saude_json && typeof r.ficha_saude_json === "object" ? r.ficha_saude_json as Aluno["fichaSaude"] : undefined,
+    // Plano financeiro
+    matriculaTaxa: r.matricula_taxa != null ? numb(r.matricula_taxa) : undefined,
+    matriculaForma: r.matricula_forma ? (r.matricula_forma as Aluno["matriculaForma"]) : undefined,
+    matriculaModalidade: r.matricula_modalidade ? (r.matricula_modalidade as Aluno["matriculaModalidade"]) : undefined,
+    matriculaParcelas: r.matricula_parcelas != null ? numb(r.matricula_parcelas) : undefined,
+    mensalidadeValor: r.mensalidade_valor != null ? numb(r.mensalidade_valor) : undefined,
+    mensalidadePeriodicidade: r.mensalidade_periodicidade ? (r.mensalidade_periodicidade as Aluno["mensalidadePeriodicidade"]) : undefined,
+    diaVencimento: r.dia_vencimento != null ? numb(r.dia_vencimento) : undefined,
+  };
+}
+
+export function rowToCobranca(r: Row): Cobranca {
+  return {
+    id: str(r.id),
+    alunoId: str(r.aluno_id),
+    tipo: (r.tipo as Cobranca["tipo"]) ?? "mensalidade",
+    descricao: str(r.descricao),
+    valor: numb(r.valor),
+    vencimento: str(r.vencimento),
+    valorPago: r.valor_pago != null ? numb(r.valor_pago) : undefined,
+    dataPagamento: r.data_pagamento ? str(r.data_pagamento) : undefined,
+    status: (r.status as Cobranca["status"]) ?? "Pendente",
+    formaPagamento: r.forma_pagamento ? (r.forma_pagamento as Cobranca["formaPagamento"]) : undefined,
+    parcelaNum: r.parcela_num != null ? numb(r.parcela_num) : undefined,
+    parcelaTotal: r.parcela_total != null ? numb(r.parcela_total) : undefined,
   };
 }
 
