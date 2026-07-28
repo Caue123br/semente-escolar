@@ -47,12 +47,21 @@ export function EtiquetasModal({ aberto, onClose, itens, onSalvarCodigo }: Props
   const [quantidades, setQuantidades] = React.useState<Record<string, number>>({});
   const [gerandoId, setGerandoId] = React.useState<string | null>(null);
 
-  // Ao abrir, começa com 1 etiqueta por item que já tem código.
+  // Ao abrir, define 1 etiqueta por item com código — mas SEM sobrescrever o que
+  // o usuário já ajustou (merge). Preserva as quantidades quando a lista de itens
+  // é refeita (ex.: após "Gerar código" disparar um refetch). Limpa ao fechar.
   React.useEffect(() => {
-    if (!aberto) return;
-    const inicial: Record<string, number> = {};
-    for (const i of itens) inicial[i.id] = i.codigoBarras ? 1 : 0;
-    setQuantidades(inicial);
+    if (!aberto) {
+      setQuantidades({});
+      return;
+    }
+    setQuantidades((atual) => {
+      const merged = { ...atual };
+      for (const i of itens) {
+        if (merged[i.id] === undefined) merged[i.id] = i.codigoBarras ? 1 : 0;
+      }
+      return merged;
+    });
   }, [aberto, itens]);
 
   if (!aberto) return null;
@@ -84,21 +93,65 @@ export function EtiquetasModal({ aberto, onClose, itens, onSalvarCodigo }: Props
 
   const totalEtiquetas = etiquetas.length;
 
+  // Impressão em janela isolada — pagina corretamente em várias páginas e não
+  // sofre interferência da UI do app (evita etiquetas cortadas / páginas em branco).
+  const imprimir = () => {
+    if (etiquetas.length === 0) return;
+    const w = window.open("", "_blank", "width=900,height=700");
+    if (!w) {
+      toast.error("Pop-up bloqueado", "Permita pop-ups deste site para imprimir as etiquetas.");
+      return;
+    }
+    w.document.write(
+      '<!doctype html><html><head><meta charset="utf-8"><title>Etiquetas</title><style>' +
+        "@page{margin:8mm}*{box-sizing:border-box}body{font-family:system-ui,-apple-system,sans-serif;margin:0}" +
+        ".grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4mm}" +
+        ".lbl{border:1px solid #e5e7eb;border-radius:6px;padding:6px 4px;text-align:center;page-break-inside:avoid;break-inside:avoid}" +
+        ".nome{font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" +
+        ".sub{font-size:10px;color:#666;margin-bottom:2px;min-height:12px}svg{max-width:100%}" +
+        "</style></head><body><div class='grid' id='g'></div></body></html>"
+    );
+    w.document.close();
+    const g = w.document.getElementById("g");
+    if (!g) return;
+    const SVGNS = "http://www.w3.org/2000/svg";
+    for (const i of etiquetas) {
+      const cell = w.document.createElement("div");
+      cell.className = "lbl";
+      const nome = w.document.createElement("div");
+      nome.className = "nome";
+      nome.textContent = i.nome;
+      cell.appendChild(nome);
+      const sub = w.document.createElement("div");
+      sub.className = "sub";
+      sub.textContent = [i.tamanho ? `Tam ${i.tamanho}` : "", i.precoVenda ? formatBRL(i.precoVenda) : ""]
+        .filter(Boolean)
+        .join(" · ");
+      cell.appendChild(sub);
+      const svg = w.document.createElementNS(SVGNS, "svg");
+      cell.appendChild(svg);
+      try {
+        JsBarcode(svg, i.codigoBarras as string, {
+          format: "CODE128",
+          width: 1.6,
+          height: 44,
+          fontSize: 13,
+          margin: 2,
+          displayValue: true,
+        });
+      } catch {
+        /* ignora valor inválido */
+      }
+      g.appendChild(cell);
+    }
+    w.focus();
+    window.setTimeout(() => {
+      w.print();
+    }, 300);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 py-8" onClick={onClose}>
-      <style>{`
-        @media print {
-          body * { visibility: hidden !important; }
-          #folha-etiquetas, #folha-etiquetas * { visibility: visible !important; }
-          #folha-etiquetas {
-            position: fixed !important; inset: 0 !important; margin: 0 !important;
-            padding: 8mm !important; background: #fff !important; display: grid !important;
-            grid-template-columns: repeat(3, 1fr) !important; gap: 4mm !important;
-          }
-          .no-print { display: none !important; }
-        }
-      `}</style>
-
       <div className="w-full max-w-4xl rounded-2xl border bg-card shadow-lg" onClick={(e) => e.stopPropagation()}>
         {/* Cabeçalho */}
         <div className="no-print flex items-center justify-between border-b px-6 py-4">
@@ -164,7 +217,7 @@ export function EtiquetasModal({ aberto, onClose, itens, onSalvarCodigo }: Props
           </span>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>Fechar</Button>
-            <Button onClick={() => window.print()} disabled={totalEtiquetas === 0}>
+            <Button onClick={imprimir} disabled={totalEtiquetas === 0}>
               <Printer className="h-4 w-4" /> Imprimir
             </Button>
           </div>
@@ -176,10 +229,7 @@ export function EtiquetasModal({ aberto, onClose, itens, onSalvarCodigo }: Props
             <div className="no-print mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Prévia
             </div>
-            <div
-              id="folha-etiquetas"
-              className="grid grid-cols-2 gap-3 sm:grid-cols-3"
-            >
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {etiquetas.map((i, idx) => (
                 <div
                   key={`${i.id}-${idx}`}
