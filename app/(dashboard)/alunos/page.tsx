@@ -33,6 +33,8 @@ import { usePerfil } from "@/lib/perfil-context";
 import { podeGerenciarAlunos } from "@/lib/access-control";
 import { useToast } from "@/lib/toast";
 import { NovaMatriculaModal } from "@/components/alunos/nova-matricula-modal";
+import { EditarAlunoModal } from "@/components/alunos/editar-aluno-modal";
+import type { Aluno } from "@/lib/types";
 import { NovaTurmaModal } from "@/components/alunos/nova-turma-modal";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 
@@ -48,6 +50,7 @@ export default function AlunosPage() {
   const [modalAberto, setModalAberto] = React.useState(false);
   const [modalTurmaAberto, setModalTurmaAberto] = React.useState(false);
   const [confirmarExcluir, setConfirmarExcluir] = React.useState<{ id: string; nome: string } | null>(null);
+  const [editando, setEditando] = React.useState<Aluno | null>(null);
   const toast = useToast();
 
   const {
@@ -55,6 +58,7 @@ export default function AlunosPage() {
     carregando: carregandoAlunos,
     erro: erroAlunos,
     add,
+    update,
     remove,
   } = useEntidade("alunos");
   const {
@@ -213,6 +217,13 @@ export default function AlunosPage() {
         onClose={() => setModalAberto(false)}
         turmas={turmas}
         onSalvar={add}
+      />
+      <EditarAlunoModal
+        aberto={editando !== null}
+        aluno={editando}
+        turmas={turmas}
+        onClose={() => setEditando(null)}
+        onSalvar={update}
       />
       <NovaTurmaModal
         aberto={modalTurmaAberto}
@@ -438,6 +449,14 @@ export default function AlunosPage() {
                                     Ficha
                                   </Button>
                                 </Link>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-xs h-7"
+                                  onClick={() => setEditando(a)}
+                                >
+                                  Editar
+                                </Button>
                                 <Button
                                   variant="ghost"
                                   size="sm"

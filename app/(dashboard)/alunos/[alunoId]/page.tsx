@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
 import {
@@ -11,6 +12,7 @@ import {
   Heart,
   MessageCircle,
   GraduationCap,
+  Pencil,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +21,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useEntidade } from "@/lib/data/store";
 import { UploadFotoAluno } from "@/components/alunos/upload-foto";
 import { FichaFinanceiraAluno } from "@/components/financeiro/ficha-financeira-aluno";
+import { EditarAlunoModal } from "@/components/alunos/editar-aluno-modal";
 import { formatDateBR, formatBRL } from "@/lib/utils";
 import type { FichaSaude } from "@/lib/types";
 
@@ -27,6 +30,7 @@ export default function AlunoDetalhePage() {
   const { items: alunos, carregando, erro: erroAlunos, update } = useEntidade("alunos");
   const { items: turmas } = useEntidade("turmas");
   const { items: mensalidades } = useEntidade("mensalidades");
+  const [editando, setEditando] = React.useState(false);
 
   const aluno = alunos.find((a) => a.id === params.alunoId);
   const turma = aluno ? turmas.find((t) => t.id === aluno.turmaId) : null;
@@ -109,6 +113,10 @@ export default function AlunoDetalhePage() {
               </div>
             </div>
             <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setEditando(true)}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Editar
+              </Button>
               <Button variant="outline" asChild>
                 <Link href={`/pedagogico/${aluno.id}`}>
                   <GraduationCap className="mr-2 h-4 w-4" />
@@ -324,6 +332,14 @@ export default function AlunoDetalhePage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <EditarAlunoModal
+        aberto={editando}
+        aluno={aluno}
+        turmas={turmas}
+        onClose={() => setEditando(false)}
+        onSalvar={update}
+      />
     </div>
   );
 }
