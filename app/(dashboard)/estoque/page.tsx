@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   Package,
   Plus,
+  Tag,
   AlertTriangle,
   Calendar,
   TrendingUp,
@@ -37,6 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useEntidade } from "@/lib/data/store";
+import { EtiquetasModal } from "@/components/estoque/etiquetas-modal";
 import { useToast } from "@/lib/toast";
 import type {
   CategoriaEstoque,
@@ -58,10 +60,11 @@ function diasAteValidade(validade: string): number {
 }
 
 export default function EstoquePage() {
-  const { items: itensEstoque, add, carregando, erro } = useEntidade("estoque");
+  const { items: itensEstoque, add, update, carregando, erro } = useEntidade("estoque");
   const [busca, setBusca] = React.useState("");
   const [subFiltro, setSubFiltro] = React.useState("todas");
   const [novoItemAberto, setNovoItemAberto] = React.useState(false);
+  const [etiquetasAberto, setEtiquetasAberto] = React.useState(false);
   const [itemReposicao, setItemReposicao] = React.useState<ItemEstoque | null>(null);
 
   const itensAbaixoPontoReposicao = itensEstoque.filter(
@@ -103,9 +106,14 @@ export default function EstoquePage() {
             Consumo (alimentos / limpeza) e Venda (uniformes / festa).
           </p>
         </div>
-        <Button onClick={() => setNovoItemAberto(true)}>
-          <Plus className="mr-2 h-4 w-4" /> Novo item
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setEtiquetasAberto(true)}>
+            <Tag className="mr-2 h-4 w-4" /> Etiquetas
+          </Button>
+          <Button onClick={() => setNovoItemAberto(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Novo item
+          </Button>
+        </div>
       </div>
 
       {erro && (
@@ -363,6 +371,12 @@ export default function EstoquePage() {
       <ReposicaoEstoqueModal
         item={itemReposicao}
         onFechar={() => setItemReposicao(null)}
+      />
+      <EtiquetasModal
+        aberto={etiquetasAberto}
+        onClose={() => setEtiquetasAberto(false)}
+        itens={venda}
+        onSalvarCodigo={update}
       />
     </div>
   );
