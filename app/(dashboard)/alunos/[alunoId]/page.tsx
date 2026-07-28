@@ -304,7 +304,18 @@ export default function AlunoDetalhePage() {
               ) : (
                 <div className="grid gap-4 md:grid-cols-2">
                   <Field label="Alergias" value={saude.alergias?.trim() || "Não informadas"} />
-                  <Field label="Doenças informadas" value={doencas.join(", ") || "Nenhuma informada"} />
+                  <Field
+                    label="Medicamento em caso de febre"
+                    value={
+                      saude.medicamentoFebreSim
+                        ? saude.medicamentoFebreQual?.trim() || "Autorizado (não especificado)"
+                        : "Não autorizado"
+                    }
+                  />
+                  <Field
+                    label="Doenças informadas"
+                    value={[...doencas, saude.doencasOutras?.trim()].filter(Boolean).join(", ") || "Nenhuma informada"}
+                  />
                   <Field
                     label="Convênio"
                     value={saude.convenioSim ? saude.convenioQual?.trim() || "Sim" : "Não informado"}
@@ -320,6 +331,10 @@ export default function AlunoDetalhePage() {
                   <Field
                     label="Internações"
                     value={saude.internadoSim ? saude.internadoMotivo?.trim() || "Sim" : "Não informadas"}
+                  />
+                  <Field
+                    label="Já desmaiou"
+                    value={saude.desmaioSim ? saude.desmaioMotivo?.trim() || "Sim" : "Não"}
                   />
                   <Field label="Trauma ou fobia" value={saude.traumaFobia?.trim() || "Não informado"} />
                   <Field
