@@ -305,11 +305,13 @@ export default function AlunoDetalhePage() {
                 <div className="grid gap-4 md:grid-cols-2">
                   <Field label="Alergias" value={saude.alergias?.trim() || "Não informadas"} />
                   <Field
-                    label="Medicamento em caso de febre"
+                    label="Medicar em febre (autorização dos responsáveis)"
                     value={
                       saude.medicamentoFebreSim
-                        ? saude.medicamentoFebreQual?.trim() || "Autorizado (não especificado)"
-                        : "Não autorizado"
+                        ? `Autorizado pelos responsáveis${
+                            saude.medicamentoFebreQual?.trim() ? ` — ${saude.medicamentoFebreQual.trim()}` : ""
+                          }`
+                        : "Não autorizado pelos responsáveis"
                     }
                   />
                   <Field

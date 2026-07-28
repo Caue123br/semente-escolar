@@ -74,6 +74,7 @@ const MODULOS_API: Array<[string, string]> = [
   ["/api/mural-posts", "mural"],
   ["/api/intercorrencias", "saude"],
   ["/api/mensalidades", "financeiro"],
+  ["/api/cobrancas", "financeiro"],
   ["/api/funcionarios", "rh"],
   ["/api/professores", "alunos"],
   ["/api/conversas", "whatsapp"],
