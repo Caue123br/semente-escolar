@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { InputCPF, InputTelefone, InputCEP } from "@/components/shared/campos-mascarados";
 import { useToast } from "@/lib/toast";
 import { cn, formatDateLocalISO } from "@/lib/utils";
 import type { Aluno, Responsavel, PessoaAutorizada, FichaSaude, Turma } from "@/lib/types";
@@ -182,6 +183,10 @@ export function NovaMatriculaModal({ aberto, onClose, turmas, onSalvar }: Props)
   const finalizar = async () => {
     if (!turmaId) {
       toast.error("Cadastre uma turma primeiro", "A matrícula precisa estar vinculada a uma turma real.");
+      return;
+    }
+    if (!pai.nome.trim() && !mae.nome.trim()) {
+      toast.error("Informe um responsável", "Cadastre ao menos o pai ou a mãe (nome e telefone) — é o contato da família.");
       return;
     }
     setSalvando(true);
@@ -467,7 +472,7 @@ function PassoAluno(props: {
         </div>
         <div>
           <Label>CPF</Label>
-          <Input className="mt-1.5" value={props.cpf} onChange={(e) => props.setCpf(e.target.value)} />
+          <InputCPF className="mt-1.5" value={props.cpf} onChange={props.setCpf} />
         </div>
         <div>
           <Label>RG</Label>
@@ -493,7 +498,15 @@ function PassoAluno(props: {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <div>
           <Label>CEP</Label>
-          <Input className="mt-1.5" value={props.cep} onChange={(e) => props.setCep(e.target.value)} placeholder="00000-000" />
+          <InputCEP
+            className="mt-1.5"
+            value={props.cep}
+            onChange={props.setCep}
+            onEndereco={(d) => {
+              if (d.logradouro) props.setEndereco(d.logradouro);
+              if (d.bairro) props.setBairro(d.bairro);
+            }}
+          />
         </div>
         <div className="md:col-span-2">
           <Label>Endereço</Label>
@@ -501,7 +514,7 @@ function PassoAluno(props: {
         </div>
         <div>
           <Label>Telefone</Label>
-          <Input className="mt-1.5" value={props.telefoneAluno} onChange={(e) => props.setTelefoneAluno(e.target.value)} />
+          <InputTelefone className="mt-1.5" value={props.telefoneAluno} onChange={props.setTelefoneAluno} />
         </div>
       </div>
 
@@ -589,7 +602,7 @@ function PassoResponsavel(props: {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
           <Label>CPF</Label>
-          <Input className="mt-1.5" value={props.dados.cpf} onChange={(e) => upd("cpf", e.target.value)} placeholder="000.000.000-00" />
+          <InputCPF className="mt-1.5" value={props.dados.cpf} onChange={(v) => upd("cpf", v)} />
         </div>
         <div>
           <Label>RG</Label>
@@ -615,7 +628,7 @@ function PassoResponsavel(props: {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <Label>Telefone</Label>
-          <Input className="mt-1.5" value={props.dados.telefone} onChange={(e) => upd("telefone", e.target.value)} placeholder="(12) 91234-5678" />
+          <InputTelefone className="mt-1.5" value={props.dados.telefone} onChange={(v) => upd("telefone", v)} />
         </div>
         <div>
           <Label>Email</Label>

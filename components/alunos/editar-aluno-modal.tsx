@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/lib/toast";
+import { InputCPF, InputTelefone, InputCEP } from "@/components/shared/campos-mascarados";
 import type { Aluno, Responsavel, Turma } from "@/lib/types";
 
 interface Props {
@@ -192,13 +193,19 @@ export function EditarAlunoModal({ aberto, aluno, turmas, onClose, onSalvar }: P
                 <Label htmlFor="ed-nasc">Data de nascimento</Label>
                 <Input id="ed-nasc" type="date" value={dataNascimento} onChange={(e) => setDataNascimento(e.target.value)} />
               </div>
-              <Campo label="CPF" value={cpf} onChange={setCpf} />
+              <div className="space-y-1.5">
+                <Label>CPF</Label>
+                <InputCPF value={cpf} onChange={setCpf} />
+              </div>
               <Campo label="RG" value={rg} onChange={setRg} />
               <Campo label="RA (registro acadêmico)" value={ra} onChange={setRa} />
               <Campo label="Raça/Cor" value={raca} onChange={setRaca} />
               <Campo label="Natural de" value={naturalDe} onChange={setNaturalDe} />
               <Campo label="Estado (UF)" value={estado} onChange={setEstado} />
-              <Campo label="Telefone" value={telefoneAluno} onChange={setTelefoneAluno} />
+              <div className="space-y-1.5">
+                <Label>Telefone</Label>
+                <InputTelefone value={telefoneAluno} onChange={setTelefoneAluno} />
+              </div>
               <Campo label="Religião" value={religiao} onChange={setReligiao} />
             </div>
           </section>
@@ -207,7 +214,17 @@ export function EditarAlunoModal({ aberto, aluno, turmas, onClose, onSalvar }: P
           <section>
             <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Endereço</div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <Campo label="CEP" value={cep} onChange={setCep} />
+              <div className="space-y-1.5">
+                <Label>CEP</Label>
+                <InputCEP
+                  value={cep}
+                  onChange={setCep}
+                  onEndereco={(d) => {
+                    if (d.logradouro) setEndereco(d.logradouro);
+                    if (d.bairro) setBairro(d.bairro);
+                  }}
+                />
+              </div>
               <Campo label="Endereço" value={endereco} onChange={setEndereco} className="sm:col-span-2" />
               <Campo label="Bairro" value={bairro} onChange={setBairro} />
             </div>
@@ -243,8 +260,14 @@ export function EditarAlunoModal({ aberto, aluno, turmas, onClose, onSalvar }: P
                           ))}
                         </select>
                       </div>
-                      <Campo label="CPF" value={r.cpf ?? ""} onChange={(v) => setResp(i, "cpf", v)} />
-                      <Campo label="Telefone" value={r.telefone ?? ""} onChange={(v) => setResp(i, "telefone", v)} />
+                      <div className="space-y-1.5">
+                        <Label>CPF</Label>
+                        <InputCPF value={r.cpf ?? ""} onChange={(v) => setResp(i, "cpf", v)} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Telefone</Label>
+                        <InputTelefone value={r.telefone ?? ""} onChange={(v) => setResp(i, "telefone", v)} />
+                      </div>
                       <Campo label="Email" value={r.email ?? ""} onChange={(v) => setResp(i, "email", v)} />
                       <Campo label="Profissão" value={r.profissao ?? ""} onChange={(v) => setResp(i, "profissao", v)} />
                     </div>
