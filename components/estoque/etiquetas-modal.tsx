@@ -46,6 +46,8 @@ export function EtiquetasModal({ aberto, onClose, itens, onSalvarCodigo }: Props
   const toast = useToast();
   const [quantidades, setQuantidades] = React.useState<Record<string, number>>({});
   const [gerandoId, setGerandoId] = React.useState<string | null>(null);
+  const [gerandoTodos, setGerandoTodos] = React.useState(false);
+  const [aplicarN, setAplicarN] = React.useState(10);
 
   // Ao abrir, define 1 etiqueta por item com código — mas SEM sobrescrever o que
   // o usuário já ajustou (merge). Preserva as quantidades quando a lista de itens
@@ -67,7 +69,52 @@ export function EtiquetasModal({ aberto, onClose, itens, onSalvarCodigo }: Props
   if (!aberto) return null;
 
   const setQtd = (id: string, v: number) =>
-    setQuantidades((atual) => ({ ...atual, [id]: Math.max(0, Math.min(100, Math.trunc(v) || 0)) }));
+    setQuantidades((atual) => ({ ...atual, [id]: Math.max(0, Math.min(999, Math.trunc(v) || 0)) }));
+
+  const comCodigo = itens.filter((i) => i.codigoBarras);
+  const semCodigo = itens.filter((i) => !i.codigoBarras);
+
+  // Ações em massa
+  const aplicarTodos = (n: number) =>
+    setQuantidades((atual) => {
+      const m = { ...atual };
+      const q = Math.max(0, Math.min(999, Math.trunc(n) || 0));
+      for (const i of comCodigo) m[i.id] = q;
+      return m;
+    });
+  const porEstoque = () =>
+    setQuantidades((atual) => {
+      const m = { ...atual };
+      for (const i of comCodigo) m[i.id] = Math.max(0, Math.min(999, Math.trunc(i.quantidade) || 0));
+      return m;
+    });
+  const limparTodos = () =>
+    setQuantidades((atual) => {
+      const m = { ...atual };
+      for (const i of itens) m[i.id] = 0;
+      return m;
+    });
+  const gerarTodosFaltantes = async () => {
+    if (semCodigo.length === 0) return;
+    setGerandoTodos(true);
+    const okIds: string[] = [];
+    for (const i of semCodigo) {
+      try {
+        await onSalvarCodigo(i.id, { codigoBarras: gerarCodigoInterno() });
+        okIds.push(i.id);
+      } catch {
+        /* código duplicado — ignora e segue */
+      }
+    }
+    // marca 1 etiqueta só para os que realmente ganharam código
+    setQuantidades((atual) => {
+      const m = { ...atual };
+      for (const id of okIds) m[id] = Math.max(1, m[id] ?? 0);
+      return m;
+    });
+    setGerandoTodos(false);
+    toast.success("Códigos gerados", `${okIds.length} de ${semCodigo.length} produto(s) ganharam código de barras.`);
+  };
 
   const gerarCodigo = async (item: ItemEstoque) => {
     setGerandoId(item.id);
@@ -97,6 +144,18 @@ export function EtiquetasModal({ aberto, onClose, itens, onSalvarCodigo }: Props
   // sofre interferência da UI do app (evita etiquetas cortadas / páginas em branco).
   const imprimir = () => {
     if (etiquetas.length === 0) return;
+    if (etiquetas.length > 3000) {
+      toast.error("Muitas etiquetas", "Máximo 3.000 por impressão. Reduza as quantidades ou imprima em lotes.");
+      return;
+    }
+    if (
+      etiquetas.length > 1000 &&
+      !window.confirm(
+        `Você vai gerar ${etiquetas.length} etiquetas. Isso pode deixar o navegador lento por alguns segundos. Continuar?`
+      )
+    ) {
+      return;
+    }
     const w = window.open("", "_blank", "width=900,height=700");
     if (!w) {
       toast.error("Pop-up bloqueado", "Permita pop-ups deste site para imprimir as etiquetas.");
@@ -169,6 +228,41 @@ export function EtiquetasModal({ aberto, onClose, itens, onSalvarCodigo }: Props
           </button>
         </div>
 
+        {/* Ações em massa */}
+        {itens.length > 0 && (
+          <div className="no-print flex flex-wrap items-center gap-2 border-b bg-muted/30 px-6 py-2.5">
+            <span className="text-xs font-semibold text-muted-foreground">Em massa:</span>
+            <Button size="sm" variant="outline" onClick={() => aplicarTodos(1)}>
+              Marcar todos (1)
+            </Button>
+            <Button size="sm" variant="outline" onClick={porEstoque}>
+              1 por unidade em estoque
+            </Button>
+            {semCodigo.length > 0 && (
+              <Button size="sm" variant="outline" disabled={gerandoTodos} onClick={gerarTodosFaltantes}>
+                {gerandoTodos ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                Gerar código p/ todos ({semCodigo.length})
+              </Button>
+            )}
+            <div className="flex items-center gap-1">
+              <Input
+                type="number"
+                min={0}
+                max={999}
+                className="h-8 w-16"
+                value={aplicarN}
+                onChange={(e) => setAplicarN(Math.max(0, Math.min(999, Math.trunc(Number(e.target.value)) || 0)))}
+              />
+              <Button size="sm" variant="outline" onClick={() => aplicarTodos(aplicarN)}>
+                a todos
+              </Button>
+            </div>
+            <Button size="sm" variant="ghost" className="ml-auto text-muted-foreground" onClick={limparTodos}>
+              Limpar
+            </Button>
+          </div>
+        )}
+
         {/* Configuração: itens + quantidade */}
         <div className="no-print max-h-[40vh] space-y-2 overflow-y-auto px-6 py-4">
           {itens.length === 0 ? (
@@ -193,7 +287,7 @@ export function EtiquetasModal({ aberto, onClose, itens, onSalvarCodigo }: Props
                     <Input
                       type="number"
                       min={0}
-                      max={100}
+                      max={999}
                       className="h-9 w-20"
                       value={quantidades[i.id] ?? 0}
                       onChange={(e) => setQtd(i.id, Number(e.target.value))}
@@ -214,6 +308,11 @@ export function EtiquetasModal({ aberto, onClose, itens, onSalvarCodigo }: Props
         <div className="no-print flex items-center justify-between border-t px-6 py-3">
           <span className="text-sm text-muted-foreground">
             {totalEtiquetas} etiqueta{totalEtiquetas === 1 ? "" : "s"} para imprimir
+            {totalEtiquetas > 500 && (
+              <span className="ml-2 text-amber-600">
+                · muitas etiquetas — o navegador pode travar por alguns segundos; considere imprimir em lotes
+              </span>
+            )}
           </span>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>Fechar</Button>
@@ -230,7 +329,7 @@ export function EtiquetasModal({ aberto, onClose, itens, onSalvarCodigo }: Props
               Prévia
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {etiquetas.map((i, idx) => (
+              {etiquetas.slice(0, 60).map((i, idx) => (
                 <div
                   key={`${i.id}-${idx}`}
                   className="flex flex-col items-center justify-between rounded-md border p-2 text-center"
@@ -244,6 +343,11 @@ export function EtiquetasModal({ aberto, onClose, itens, onSalvarCodigo }: Props
                 </div>
               ))}
             </div>
+            {etiquetas.length > 60 && (
+              <p className="mt-3 text-center text-xs text-muted-foreground">
+                + {etiquetas.length - 60} etiqueta(s) — a prévia mostra as primeiras 60, mas <strong>todas</strong> serão impressas.
+              </p>
+            )}
           </div>
         )}
       </div>
