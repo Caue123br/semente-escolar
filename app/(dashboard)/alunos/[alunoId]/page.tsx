@@ -118,6 +118,12 @@ export default function AlunoDetalhePage() {
                 Editar
               </Button>
               <Button variant="outline" asChild>
+                <Link href={`/contrato/${aluno.id}`} target="_blank">
+                  <FileText className="mr-2 h-4 w-4" />
+                  Contrato
+                </Link>
+              </Button>
+              <Button variant="outline" asChild>
                 <Link href={`/pedagogico/${aluno.id}`}>
                   <GraduationCap className="mr-2 h-4 w-4" />
                   Acompanhamento pedagógico

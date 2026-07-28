@@ -40,6 +40,7 @@ const ROTAS_PROTEGIDAS = [
   "/whatsapp",
   "/boletim",
   "/ficha",
+  "/contrato",
   "/extrato",
   "/saude",
   "/recados",

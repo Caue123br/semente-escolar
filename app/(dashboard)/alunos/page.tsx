@@ -244,9 +244,16 @@ export default function AlunosPage() {
                 onAtualizado={() => window.dispatchEvent(new CustomEvent("semente:changed:alunos"))}
               />
             </div>
-            <Button className="mt-6 w-full" onClick={() => setFotoNovoAluno(null)}>
-              Concluir
-            </Button>
+            <div className="mt-6 space-y-2">
+              <Button variant="outline" className="w-full" asChild>
+                <Link href={`/contrato/${fotoNovoAluno.id}`} target="_blank" onClick={() => setFotoNovoAluno(null)}>
+                  Gerar contrato
+                </Link>
+              </Button>
+              <Button className="w-full" onClick={() => setFotoNovoAluno(null)}>
+                Concluir
+              </Button>
+            </div>
           </div>
         </div>
       )}

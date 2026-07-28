@@ -13,6 +13,7 @@ export const MODULO_POR_ROTA: Readonly<Record<string, string>> = {
   "/boletim": "pedagogico",
   "/alunos": "alunos",
   "/ficha": "alunos",
+  "/contrato": "alunos",
   "/kanban": "kanban",
   "/biblioteca": "biblioteca",
   "/bercario": "bercario",
