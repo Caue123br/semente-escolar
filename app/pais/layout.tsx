@@ -8,6 +8,10 @@ export const metadata: Metadata = {
   description: "Acompanhe a vida escolar do seu filho",
 };
 
+// O portal é controlado por ENABLE_PARENT_PORTAL em runtime; sem isto o Next
+// prerenderiza /pais/login estático e "assa" o estado da flag no HTML.
+export const dynamic = "force-dynamic";
+
 export default function PaisLayout({ children }: { children: React.ReactNode }) {
   if (process.env.ENABLE_PARENT_PORTAL !== "true") {
     return (

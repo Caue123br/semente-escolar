@@ -161,7 +161,18 @@ function origemPermitida(req: NextRequest): boolean {
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return true;
   const origin = req.headers.get("origin");
   if (!origin) return true;
-  return origin === req.nextUrl.origin;
+  // Atrás de um reverse proxy (nginx) o app recebe a requisição em HTTP, então
+  // req.nextUrl.origin pode ser http:// enquanto o navegador envia Origin https://.
+  // Comparar o host (mesma-origem por host) evita falso "Origem não permitida"
+  // sem enfraquecer a proteção CSRF. O Host chega via proxy_set_header Host $host.
+  try {
+    const originHost = new URL(origin).host;
+    const hostEsperado =
+      req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? req.nextUrl.host;
+    return originHost === hostEsperado;
+  } catch {
+    return false;
+  }
 }
 
 export async function proxy(req: NextRequest) {

@@ -389,15 +389,35 @@ export async function seedBiblioteca(options: SeedOptions = {}) {
   );
   await seedSeOuVazio(
     "biblioteca_emprestimos",
-    emprestimosSeed.map((e) => ({
-      id: e.id,
-      livro_id: e.livroId,
-      aluno_nome: e.alunoNome,
-      turma: e.turma,
-      data_emprestimo: dataNoMesAtual(e.dataEmprestimo, options),
-      data_devolucao_prevista: dataNoMesAtual(e.dataDevolucaoPrevista, options),
-      status: e.status,
-    })),
+    emprestimosSeed.map((e) => {
+      const emprestimo = dataNoMesAtual(e.dataEmprestimo, options);
+      let prevista = dataNoMesAtual(e.dataDevolucaoPrevista, options);
+      // Ao reposicionar as duas datas para o mês atual preservando só o dia, um
+      // empréstimo que cruzava a virada de mês (ex.: 28/05 -> 07/06) fica com
+      // devolução anterior à retirada e viola o CHECK datas_validas, abortando
+      // toda a transação do seed. Recalcula a devolução a partir da retirada já
+      // reposicionada, mantendo a duração original do empréstimo.
+      if (emprestimo && prevista && prevista < emprestimo) {
+        const dias = Math.max(
+          0,
+          Math.round(
+            (Date.parse(e.dataDevolucaoPrevista) - Date.parse(e.dataEmprestimo)) / 86_400_000
+          )
+        );
+        const base = new Date(`${emprestimo}T00:00:00Z`);
+        base.setUTCDate(base.getUTCDate() + dias);
+        prevista = base.toISOString().slice(0, 10);
+      }
+      return {
+        id: e.id,
+        livro_id: e.livroId,
+        aluno_nome: e.alunoNome,
+        turma: e.turma,
+        data_emprestimo: emprestimo,
+        data_devolucao_prevista: prevista,
+        status: e.status,
+      };
+    }),
     options
   );
 }
