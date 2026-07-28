@@ -15,7 +15,7 @@ const TURNOS: Turno[] = ["Manhã", "Tarde", "Integral"];
 interface Props {
   aberto: boolean;
   onClose: () => void;
-  onSalvar: (turma: Turma) => Promise<void>;
+  onSalvar: (turma: Turma) => Promise<unknown>;
 }
 
 export function NovaTurmaModal({ aberto, onClose, onSalvar }: Props) {

@@ -380,7 +380,7 @@ function EditarFuncionarioModal({
 }: {
   funcionario: Funcionario | null;
   onFechar: () => void;
-  onSalvar: (f: Funcionario) => Promise<void>;
+  onSalvar: (f: Funcionario) => Promise<unknown>;
 }) {
   const [nome, setNome] = React.useState("");
   const [cargo, setCargo] = React.useState<CargoFuncionario>("Professor");

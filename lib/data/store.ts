@@ -182,7 +182,7 @@ export function useEntidade<K extends keyof Entidades>(
   options: { habilitado?: boolean } = {}
 ): {
   items: Entidades[K];
-  add: (item: Entidades[K][number]) => Promise<void>;
+  add: (item: Entidades[K][number]) => Promise<Entidades[K][number] | null>;
   update: (id: string, patch: Partial<Entidades[K][number]>) => Promise<void>;
   remove: (id: string) => Promise<void>;
   reset: () => void;
@@ -238,17 +238,17 @@ export function useEntidade<K extends keyof Entidades>(
     };
   }, [chave, carregar, habilitado]);
 
-  const add = async (item: Entidades[K][number]) => {
-    if (!apiUrl) return;
+  const add = async (item: Entidades[K][number]): Promise<Entidades[K][number] | null> => {
+    if (!apiUrl) return null;
     try {
       const resposta = await postApi(apiUrl, item);
+      let criado: Entidades[K][number] | null = null;
       if (resposta.item && typeof resposta.item === "object") {
-        setItems((anteriores) => [
-          resposta.item as Entidades[K][number],
-          ...(anteriores as unknown[]),
-        ] as Entidades[K]);
+        criado = resposta.item as Entidades[K][number];
+        setItems((anteriores) => [criado, ...(anteriores as unknown[])] as Entidades[K]);
       }
       window.dispatchEvent(new CustomEvent(`semente:changed:${chave}`));
+      return criado;
     } catch (e) {
       console.warn(`[Escola Modelo] POST falhou`, e);
       toast.error("Não foi possível salvar", formatarErro(e));

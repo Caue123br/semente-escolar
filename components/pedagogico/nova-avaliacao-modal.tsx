@@ -21,7 +21,7 @@ interface Props {
   aluno: Aluno;
   avaliacoes: AvaliacaoPedagogica[];
   onClose: () => void;
-  onSalvar: (avaliacao: AvaliacaoPedagogica) => Promise<void>;
+  onSalvar: (avaliacao: AvaliacaoPedagogica) => Promise<unknown>;
 }
 
 const BIMESTRES = [1, 2, 3, 4] as const;

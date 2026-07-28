@@ -24,7 +24,7 @@ interface Props {
   aberto: boolean;
   onClose: () => void;
   turmas: Turma[];
-  onSalvar: (aluno: Aluno) => Promise<void>;
+  onSalvar: (aluno: Aluno) => Promise<unknown>;
 }
 
 type PassoNumero = 1 | 2 | 3 | 4 | 5 | 6;

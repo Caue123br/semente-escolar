@@ -499,7 +499,7 @@ function NovoItemEstoqueModal({
 }: {
   aberto: boolean;
   onFechar: () => void;
-  onSalvar: (item: ItemEstoque) => Promise<void>;
+  onSalvar: (item: ItemEstoque) => Promise<unknown>;
 }) {
   const toast = useToast();
   const [nome, setNome] = React.useState("");

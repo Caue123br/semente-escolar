@@ -34,6 +34,7 @@ import { podeGerenciarAlunos } from "@/lib/access-control";
 import { useToast } from "@/lib/toast";
 import { NovaMatriculaModal } from "@/components/alunos/nova-matricula-modal";
 import { EditarAlunoModal } from "@/components/alunos/editar-aluno-modal";
+import { UploadFotoAluno } from "@/components/alunos/upload-foto";
 import type { Aluno } from "@/lib/types";
 import { NovaTurmaModal } from "@/components/alunos/nova-turma-modal";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -51,6 +52,7 @@ export default function AlunosPage() {
   const [modalTurmaAberto, setModalTurmaAberto] = React.useState(false);
   const [confirmarExcluir, setConfirmarExcluir] = React.useState<{ id: string; nome: string } | null>(null);
   const [editando, setEditando] = React.useState<Aluno | null>(null);
+  const [fotoNovoAluno, setFotoNovoAluno] = React.useState<Aluno | null>(null);
   const toast = useToast();
 
   const {
@@ -101,6 +103,12 @@ export default function AlunosPage() {
     } catch {
       // A store mantém o diálogo aberto e já mostra o motivo retornado pela API.
     }
+  };
+
+  // Após matricular, oferece adicionar a foto do aluno recém-criado (onboarding).
+  const criarComFoto = async (aluno: Aluno) => {
+    const criado = await add(aluno);
+    if (criado) setFotoNovoAluno(criado);
   };
 
   const filtrados = alunos.filter((a) => {
@@ -216,8 +224,32 @@ export default function AlunosPage() {
         aberto={modalAberto}
         onClose={() => setModalAberto(false)}
         turmas={turmas}
-        onSalvar={add}
+        onSalvar={criarComFoto}
       />
+
+      {/* Onboarding: foto do aluno recém-matriculado (opcional) */}
+      {fotoNovoAluno && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setFotoNovoAluno(null)}>
+          <div className="w-full max-w-sm rounded-2xl border bg-card p-6 text-center shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold">Matrícula concluída! 🎉</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Adicione uma foto de {fotoNovoAluno.nome.split(" ")[0]} (opcional).
+            </p>
+            <div className="mt-5 flex justify-center">
+              <UploadFotoAluno
+                alunoId={fotoNovoAluno.id}
+                nomeAluno={fotoNovoAluno.nome}
+                cor={turmas.find((t) => t.id === fotoNovoAluno.turmaId)?.cor}
+                size="xl"
+                onAtualizado={() => window.dispatchEvent(new CustomEvent("semente:changed:alunos"))}
+              />
+            </div>
+            <Button className="mt-6 w-full" onClick={() => setFotoNovoAluno(null)}>
+              Concluir
+            </Button>
+          </div>
+        </div>
+      )}
       <EditarAlunoModal
         aberto={editando !== null}
         aluno={editando}
