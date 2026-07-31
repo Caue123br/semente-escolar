@@ -5,7 +5,7 @@ import { ThemeProvider } from "@/lib/theme-context";
 import { ToastProvider } from "@/lib/toast";
 
 const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ?? "https://semente-escolar.vercel.app";
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://sementeescolar.com";
 const siteTitle = "Escola Modelo — Gestão escolar completa";
 const siteDescription =
   "Sistema de gestão escolar da Escola Modelo Taubaté. Administração, financeiro, pedagógico e portal dos pais.";

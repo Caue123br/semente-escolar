@@ -1,13 +1,26 @@
 import { NextResponse } from "next/server";
+import { isIP } from "node:net";
 import { getDatabase } from "@/lib/db/postgres";
 import { seedAlunos } from "@/lib/db/seed";
 import { assinarSessaoPais } from "@/lib/db/pais-session";
+import { checkRateLimit } from "@/lib/db/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function normaliza(s: string): string {
   return s.replace(/\D/g, "");
+}
+
+function clientIp(req: Request): string {
+  const realIp = req.headers.get("x-real-ip")?.trim();
+  if (realIp && isIP(realIp)) return realIp;
+  const forwarded = req.headers.get("x-forwarded-for")
+    ?.split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .at(-1);
+  return forwarded && isIP(forwarded) ? forwarded : "unknown";
 }
 
 export async function POST(req: Request) {
@@ -17,7 +30,24 @@ export async function POST(req: Request) {
       { status: 503 }
     );
   }
-  const { email, cpf } = (await req.json()) as { email?: string; cpf?: string };
+
+  // Login das famílias é só email+CPF (sem senha). Rate limit por IP protege
+  // contra força-bruta de CPF e enumeração de responsáveis.
+  const rl = checkRateLimit(`pais-login:${clientIp(req)}`, 8, 5 * 60 * 1000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: `Muitas tentativas. Tente novamente em ${Math.ceil(rl.resetIn / 60)} minuto(s).` },
+      { status: 429 }
+    );
+  }
+
+  let email: string | undefined;
+  let cpf: string | undefined;
+  try {
+    ({ email, cpf } = (await req.json()) as { email?: string; cpf?: string });
+  } catch {
+    return NextResponse.json({ error: "Body JSON inválido" }, { status: 400 });
+  }
   if (!email || !cpf) {
     return NextResponse.json({ error: "Email e CPF são obrigatórios" }, { status: 400 });
   }

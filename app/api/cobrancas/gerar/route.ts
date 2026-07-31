@@ -119,17 +119,49 @@ export async function POST(req: Request) {
     }
   }
 
-  // Substitui as cobranças NÃO pagas do aluno (preserva as já pagas), depois insere as novas.
-  const { error: errDel } = await sb
-    .from("cobrancas")
-    .delete()
-    .eq("aluno_id", alunoId)
-    .in("status", ["Pendente", "Atrasada"]);
-  if (errDel) return erros.servidorIndisponivel(errDel);
+  // Não recriar períodos que já foram pagos, senão o responsável é cobrado 2x.
+  // Chave do período: matrícula por número da parcela; mensalidade por ano-mês do vencimento.
+  const chavePeriodo = (
+    tipo: unknown,
+    vencimento: unknown,
+    parcelaNum: unknown
+  ): string =>
+    tipo === "matricula"
+      ? `matricula:${Number(parcelaNum) || 1}`
+      : `mensalidade:${String(vencimento ?? "").slice(0, 7)}`;
 
-  if (novas.length > 0) {
-    const { error: errIns } = await sb.from("cobrancas").insert(novas);
-    if (errIns) return erros.servidorIndisponivel(errIns);
+  const { data: pagas, error: errPagas } = await sb
+    .from("cobrancas")
+    .select("tipo, vencimento, parcela_num")
+    .eq("aluno_id", alunoId)
+    .eq("status", "Pago");
+  if (errPagas) return erros.servidorIndisponivel(errPagas);
+
+  const pagasSet = new Set(
+    (pagas ?? []).map((c) => chavePeriodo(c.tipo, c.vencimento, c.parcela_num))
+  );
+  const novasFiltradas = novas.filter(
+    (n) => !pagasSet.has(chavePeriodo(n.tipo, n.vencimento, n.parcela_num))
+  );
+
+  // Substitui as cobranças NÃO pagas do aluno (preserva as já pagas) e insere as
+  // novas de forma atômica — se o insert falhar, o delete é revertido (sem perda).
+  try {
+    await sb.transaction(async (tx) => {
+      const { error: errDel } = await tx
+        .from("cobrancas")
+        .delete()
+        .eq("aluno_id", alunoId)
+        .in("status", ["Pendente", "Atrasada"]);
+      if (errDel) throw new Error(errDel.message);
+
+      if (novasFiltradas.length > 0) {
+        const { error: errIns } = await tx.from("cobrancas").insert(novasFiltradas);
+        if (errIns) throw new Error(errIns.message);
+      }
+    });
+  } catch (e) {
+    return erros.servidorIndisponivel(e);
   }
 
   const { data, error } = await sb
