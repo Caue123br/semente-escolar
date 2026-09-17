@@ -28,11 +28,11 @@ import { SkeletonTableRows } from "@/components/ui/skeleton";
 import { useSort } from "@/lib/use-sort";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { initials, formatDateBR, formatDateLocalISO } from "@/lib/utils";
-import { useEntidade } from "@/lib/data/store";
+import { useEntidade, type OpcoesEscrita } from "@/lib/data/store";
 import { usePerfil } from "@/lib/perfil-context";
 import { podeGerenciarAlunos } from "@/lib/access-control";
 import { useToast } from "@/lib/toast";
-import { NovaMatriculaModal } from "@/components/alunos/nova-matricula-modal";
+import { NovaMatriculaModal, limparRascunhoMatriculaVencido } from "@/components/alunos/nova-matricula-modal";
 import { EditarAlunoModal } from "@/components/alunos/editar-aluno-modal";
 import { UploadFotoAluno } from "@/components/alunos/upload-foto";
 import type { Aluno } from "@/lib/types";
@@ -40,6 +40,16 @@ import { NovaTurmaModal } from "@/components/alunos/nova-turma-modal";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 
 const STORAGE_FILTROS_ALUNOS = "alunos:filtros";
+const ALUNOS_POR_PAGINA = 25;
+
+/** "Ines" precisa achar "Inês": compara sem acento e sem caixa. */
+function normalizarBusca(valor: string): string {
+  return valor
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLocaleLowerCase("pt-BR");
+}
 
 export default function AlunosPage() {
   const { perfil } = usePerfil();
@@ -52,6 +62,7 @@ export default function AlunosPage() {
   const [modalTurmaAberto, setModalTurmaAberto] = React.useState(false);
   const [confirmarExcluir, setConfirmarExcluir] = React.useState<{ id: string; nome: string } | null>(null);
   const [editando, setEditando] = React.useState<Aluno | null>(null);
+  const [pagina, setPagina] = React.useState(1);
   const [fotoNovoAluno, setFotoNovoAluno] = React.useState<Aluno | null>(null);
   const toast = useToast();
 
@@ -70,6 +81,11 @@ export default function AlunosPage() {
     add: addTurma,
   } = useEntidade("turmas");
   const carregando = carregandoAlunos || carregandoTurmas;
+
+  // Rascunho de matrícula vencido não fica guardado no computador da secretaria.
+  React.useEffect(() => {
+    limparRascunhoMatriculaVencido();
+  }, []);
 
   // Restaura filtros do localStorage no mount
   React.useEffect(() => {
@@ -106,13 +122,15 @@ export default function AlunosPage() {
   };
 
   // Após matricular, oferece adicionar a foto do aluno recém-criado (onboarding).
-  const criarComFoto = async (aluno: Aluno) => {
-    const criado = await add(aluno);
+  // As opções levam o Idempotency-Key e as confirmações (duplicata/lotação) do modal.
+  const criarComFoto = async (aluno: Aluno, opcoes: OpcoesEscrita) => {
+    const criado = await add(aluno, opcoes);
     if (criado) setFotoNovoAluno(criado);
   };
 
+  const buscaNormalizada = normalizarBusca(busca);
   const filtrados = alunos.filter((a) => {
-    const mB = busca ? a.nome.toLowerCase().includes(busca.toLowerCase()) : true;
+    const mB = buscaNormalizada ? normalizarBusca(a.nome).includes(buscaNormalizada) : true;
     const mT = turmaFiltro === "todas" || a.turmaId === turmaFiltro;
     const mBL = bilinguismo === "todos" || (bilinguismo === "sim" ? a.bilingue : !a.bilingue);
     const mAlergia = !comAlergia || Boolean(a.fichaSaude?.alergias?.trim());
@@ -134,6 +152,17 @@ export default function AlunosPage() {
     },
     { key: "nome", direction: "asc" }
   );
+
+  const totalPaginas = Math.max(1, Math.ceil(ordenados.length / ALUNOS_POR_PAGINA));
+  const visiveis = ordenados.slice((pagina - 1) * ALUNOS_POR_PAGINA, pagina * ALUNOS_POR_PAGINA);
+
+  // Mudou filtro/busca: volta pra primeira página. Encolheu a lista: não fica em página vazia.
+  React.useEffect(() => {
+    setPagina(1);
+  }, [busca, turmaFiltro, bilinguismo, comAlergia]);
+  React.useEffect(() => {
+    if (pagina > totalPaginas) setPagina(totalPaginas);
+  }, [pagina, totalPaginas]);
 
   const exportarCSV = () => {
     const linhas = podeGerenciar
@@ -423,7 +452,7 @@ export default function AlunosPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {ordenados.map((a) => {
+                  {visiveis.map((a) => {
                     const turma = turmas.find((t) => t.id === a.turmaId);
                     const resp = a.responsaveis.find((r) => r.principal) ?? a.responsaveis[0];
                     return (
@@ -513,6 +542,27 @@ export default function AlunosPage() {
                   })}
                 </TableBody>
               </Table>
+              )}
+              {filtrados.length > 0 && totalPaginas > 1 && (
+                <div className="flex items-center justify-between gap-2 px-6 py-3 text-xs">
+                  <button
+                    onClick={() => setPagina((p) => Math.max(1, p - 1))}
+                    disabled={pagina === 1}
+                    className="rounded-md border px-3 py-1 hover:bg-accent disabled:opacity-40"
+                  >
+                    Anterior
+                  </button>
+                  <span className="text-muted-foreground">
+                    Página {pagina} de {totalPaginas} · mostrando {visiveis.length} de {ordenados.length} alunos
+                  </span>
+                  <button
+                    onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
+                    disabled={pagina === totalPaginas}
+                    className="rounded-md border px-3 py-1 hover:bg-accent disabled:opacity-40"
+                  >
+                    Próxima
+                  </button>
+                </div>
               )}
             </CardContent>
           </Card>

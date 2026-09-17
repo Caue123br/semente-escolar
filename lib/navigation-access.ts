@@ -48,7 +48,10 @@ export function rotaSomenteDiretor(pathname: string): boolean {
   );
 }
 
-/** A ficha reúne dados cadastrais e de saúde, por isso é mais restrita. */
+/**
+ * Ficha e contrato reúnem dados cadastrais, documentos dos responsáveis, saúde
+ * e plano financeiro do aluno, por isso são mais restritos que o módulo.
+ */
 export function podeAcessarFicha(perfil: Perfil): boolean {
   return perfil === "diretor" || perfil === "coordenador";
 }

@@ -24,6 +24,7 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { useEntidade } from "@/lib/data/store";
+import { usePerfil } from "@/lib/perfil-context";
 import { useToast } from "@/lib/toast";
 import { formatBRL, formatDateBR, formatDateLocalISO, initials } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -31,8 +32,32 @@ import { SortHeader } from "@/components/ui/sort-header";
 import { useSort } from "@/lib/use-sort";
 import type { Funcionario, CargoFuncionario } from "@/lib/mock-data/rh";
 
+/**
+ * GET /api/funcionarios manda CPF e salário apenas para o diretor; para os
+ * outros perfis os dois campos chegam redigidos (cpf "" e salarioBruto 0) com
+ * `camposRestritos`. Mostrar esse zero como folha real, somar KPI com ele ou
+ * calcular holerite em cima dele é número errado na tela — pior que valor
+ * escondido. Onde o valor não vem, a tela diz que é restrito.
+ */
+function ValorRestrito() {
+  return (
+    <span
+      className="font-normal text-muted-foreground"
+      title="CPF e salário são folha de pagamento: só a direção vê."
+    >
+      —{" "}
+      <span className="text-[10px] uppercase tracking-wide">restrito</span>
+    </span>
+  );
+}
+
 export default function RhPage() {
   const { items: funcionarios, update } = useEntidade("funcionarios");
+  const { perfil, carregando: carregandoPerfil } = usePerfil();
+  // Mesma condição do `camposRestritos` do GET (a store só repassa `items`, por
+  // isso a tela olha o perfil da sessão). Enquanto a sessão carrega, trata como
+  // restrito: some um valor que ainda não chegou, em vez de exibir zero.
+  const folhaVisivel = !carregandoPerfil && perfil === "diretor";
   const [busca, setBusca] = React.useState("");
   const [modalAberto, setModalAberto] = React.useState(false);
   const [editando, setEditando] = React.useState<Funcionario | null>(null);
@@ -91,13 +116,21 @@ export default function RhPage() {
         </Card>
         <Card className="p-5">
           <div className="text-xs uppercase text-muted-foreground">Folha bruta</div>
-          <div className="mt-1 text-2xl font-bold">{formatBRL(totalFolhaBruta)}</div>
-          <div className="text-xs text-muted-foreground mt-1">Mensal</div>
+          <div className="mt-1 text-2xl font-bold">
+            {folhaVisivel ? formatBRL(totalFolhaBruta) : <ValorRestrito />}
+          </div>
+          <div className="text-xs text-muted-foreground mt-1">
+            {folhaVisivel ? "Mensal" : "Só a direção vê a folha"}
+          </div>
         </Card>
         <Card className="p-5">
           <div className="text-xs uppercase text-muted-foreground">Encargos estimados</div>
-          <div className="mt-1 text-2xl font-bold text-warning">{formatBRL(totalEncargos)}</div>
-          <div className="text-xs text-muted-foreground mt-1">INSS + FGTS + 13º (≈28%)</div>
+          <div className="mt-1 text-2xl font-bold text-warning">
+            {folhaVisivel ? formatBRL(totalEncargos) : <ValorRestrito />}
+          </div>
+          <div className="text-xs text-muted-foreground mt-1">
+            {folhaVisivel ? "INSS + FGTS + 13º (≈28%)" : "Depende da folha bruta"}
+          </div>
         </Card>
         <Card className="p-5">
           <div className="text-xs uppercase text-muted-foreground">Em férias</div>
@@ -152,7 +185,13 @@ export default function RhPage() {
                     <SortHeader active={sort.key === "cargo"} direction={sort.direction} onClick={() => toggle("cargo")}>Cargo</SortHeader>
                     <SortHeader active={sort.key === "admissao"} direction={sort.direction} onClick={() => toggle("admissao")}>Admissão</SortHeader>
                     <SortHeader active={sort.key === "vinculo"} direction={sort.direction} onClick={() => toggle("vinculo")}>Vínculo</SortHeader>
-                    <SortHeader active={sort.key === "salario"} direction={sort.direction} onClick={() => toggle("salario")}>Salário</SortHeader>
+                    {folhaVisivel ? (
+                      <SortHeader active={sort.key === "salario"} direction={sort.direction} onClick={() => toggle("salario")}>Salário</SortHeader>
+                    ) : (
+                      // Sem o salário não há o que ordenar: ordenar por um campo
+                      // redigido só faria a tabela parecer quebrada.
+                      <TableHead>Salário</TableHead>
+                    )}
                     <SortHeader active={sort.key === "status"} direction={sort.direction} onClick={() => toggle("status")}>Status</SortHeader>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
@@ -180,7 +219,9 @@ export default function RhPage() {
                       <TableCell>
                         <Badge variant="secondary" className="text-[10px]">{f.vinculo}</Badge>
                       </TableCell>
-                      <TableCell className="font-semibold">{formatBRL(f.salarioBruto)}</TableCell>
+                      <TableCell className="font-semibold">
+                        {folhaVisivel ? formatBRL(f.salarioBruto) : <ValorRestrito />}
+                      </TableCell>
                       <TableCell>
                         <Badge
                           variant={
@@ -223,6 +264,18 @@ export default function RhPage() {
         </TabsContent>
 
         <TabsContent value="folha">
+          {!folhaVisivel ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Folha de pagamento restrita</CardTitle>
+                <CardDescription>
+                  Salário e CPF chegam a este perfil em branco, então esta aba não calcula
+                  INSS, IRRF nem líquido — a conta sairia zerada e pareceria real. Peça o
+                  espelho da folha à direção.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          ) : (
           <div className="space-y-4">
             <div className="grid gap-4 md:grid-cols-3">
               <Card className="p-5">
@@ -282,6 +335,7 @@ export default function RhPage() {
               </CardContent>
             </Card>
           </div>
+          )}
         </TabsContent>
 
         <TabsContent value="ferias">
@@ -343,6 +397,7 @@ export default function RhPage() {
 
       <EditarFuncionarioModal
         funcionario={editando}
+        folhaVisivel={folhaVisivel}
         onFechar={() => setEditando(null)}
         onSalvar={async (f) => {
           await update(f.id, f);
@@ -373,14 +428,19 @@ export default function RhPage() {
   );
 }
 
+type PatchFuncionario = Partial<Funcionario> & { id: string; nome: string };
+
 function EditarFuncionarioModal({
   funcionario,
+  folhaVisivel,
   onFechar,
   onSalvar,
 }: {
   funcionario: Funcionario | null;
+  /** Diretor: CPF e salário chegam de verdade e podem ser editados aqui. */
+  folhaVisivel: boolean;
   onFechar: () => void;
-  onSalvar: (f: Funcionario) => Promise<unknown>;
+  onSalvar: (dados: PatchFuncionario) => Promise<unknown>;
 }) {
   const [nome, setNome] = React.useState("");
   const [cargo, setCargo] = React.useState<CargoFuncionario>("Professor");
@@ -411,17 +471,26 @@ function EditarFuncionarioModal({
     e.preventDefault();
     setSalvando(true);
     try {
-      await onSalvar({
+      const dados: PatchFuncionario = {
         ...funcionario,
         nome,
         cargo,
-        cpf,
         email,
         telefone,
-        salarioBruto,
         vinculo,
         status,
-      });
+      };
+      if (folhaVisivel) {
+        dados.cpf = cpf;
+        dados.salarioBruto = salarioBruto;
+      } else {
+        // Estes dois chegaram redigidos do GET. Reenviá-los mandaria cpf "" e
+        // salário 0 (o PATCH ignora os dois para quem não é diretor, mas nem
+        // devem entrar no corpo nem no log de auditoria da edição).
+        delete dados.cpf;
+        delete dados.salarioBruto;
+      }
+      await onSalvar(dados);
     } finally {
       setSalvando(false);
     }
@@ -476,7 +545,11 @@ function EditarFuncionarioModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>CPF</Label>
-              <Input className="mt-1.5" value={cpf} onChange={(e) => setCpf(e.target.value)} />
+              {folhaVisivel ? (
+                <Input className="mt-1.5" value={cpf} onChange={(e) => setCpf(e.target.value)} />
+              ) : (
+                <Input className="mt-1.5" value="" disabled placeholder="Restrito à direção" />
+              )}
             </div>
             <div>
               <Label>Email</Label>
@@ -503,16 +576,26 @@ function EditarFuncionarioModal({
             </div>
             <div>
               <Label>Salário bruto</Label>
-              <Input
-                className="mt-1.5"
-                type="number"
-                min={0}
-                step="0.01"
-                value={salarioBruto}
-                onChange={(e) => setSalarioBruto(Number(e.target.value))}
-              />
+              {folhaVisivel ? (
+                <Input
+                  className="mt-1.5"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={salarioBruto}
+                  onChange={(e) => setSalarioBruto(Number(e.target.value))}
+                />
+              ) : (
+                <Input className="mt-1.5" value="" disabled placeholder="Restrito à direção" />
+              )}
             </div>
           </div>
+          {!folhaVisivel && (
+            <p className="text-xs text-muted-foreground">
+              CPF e salário são folha de pagamento: só a direção vê e altera. Salvar aqui
+              mantém os dois como estão e grava o resto normalmente.
+            </p>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onFechar}>Cancelar</Button>
             <Button type="submit" disabled={salvando} className="bg-emerald-600 hover:bg-emerald-700">

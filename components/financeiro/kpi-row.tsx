@@ -7,28 +7,38 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { formatBRL, cn } from "@/lib/utils";
+import { formatBRL, cn, formatDateLocalISO } from "@/lib/utils";
 import { useEntidade } from "@/lib/data/store";
 import { usePeriodoContexto } from "@/lib/contexto-periodo";
 import { ComparacaoMesAnterior, MESES_PT_ABREV } from "@/components/shared/seletor-mes";
+import { dividaEmAberto, somaEmAberto, somaRecebida } from "@/lib/financeiro-mensalidades";
+import type { Mensalidade } from "@/lib/types";
+
+const soma = (lista: Mensalidade[]) => lista.reduce((a, m) => a + m.valor, 0);
 
 export function KpiRow() {
   const { periodo, periodoAnterior } = usePeriodoContexto();
   const { items: mensalidades } = useEntidade("mensalidades");
 
+  const hoje = formatDateLocalISO();
+
   // Atual
   const doMes = mensalidades.filter((m) => m.competencia === periodo.competencia);
-  const recebido = doMes.filter((m) => m.status === "Paga").reduce((a, m) => a + (m.valorPago ?? m.valor), 0);
-  const aReceber = doMes.filter((m) => m.status === "A Vencer" || m.status === "Vence Hoje").reduce((a, m) => a + m.valor, 0);
-  const inadimplencia = doMes.filter((m) => m.status === "Atrasada").reduce((a, m) => a + m.valor, 0);
-  const faturado = doMes.reduce((a, m) => a + m.valor, 0);
-  const inadimplentesQtd = doMes.filter((m) => m.status === "Atrasada").length;
+  const recebido = somaRecebida(doMes);
+  const { atrasadas, aVencer } = dividaEmAberto(doMes, hoje);
+  const aReceber = somaEmAberto(aVencer);
+  const inadimplencia = somaEmAberto(atrasadas);
+  const faturado = soma(doMes);
+  const inadimplentesQtd = atrasadas.length;
+
+  const renegociadas = doMes.filter((m) => m.status === "Renegociada");
+  const totalRenegociado = somaEmAberto(renegociadas);
 
   // Anterior pra comparação
   const doMesAnterior = mensalidades.filter((m) => m.competencia === periodoAnterior.competencia);
-  const faturadoAnterior = doMesAnterior.reduce((a, m) => a + m.valor, 0);
-  const recebidoAnterior = doMesAnterior.filter((m) => m.status === "Paga").reduce((a, m) => a + (m.valorPago ?? m.valor), 0);
-  const inadimplenciaAnterior = doMesAnterior.filter((m) => m.status === "Atrasada").reduce((a, m) => a + m.valor, 0);
+  const faturadoAnterior = soma(doMesAnterior);
+  const recebidoAnterior = somaRecebida(doMesAnterior);
+  const inadimplenciaAnterior = somaEmAberto(dividaEmAberto(doMesAnterior, hoje).atrasadas);
 
   const mesNome = MESES_PT_ABREV[periodo.mes];
 
@@ -58,7 +68,7 @@ export function KpiRow() {
         icone={Clock}
         cor="text-amber-500"
         bg="bg-amber-100"
-        rodape="Vence ainda neste mês"
+        rodape={`${aVencer.length} parcela${aVencer.length !== 1 ? "s" : ""} com vencimento a chegar`}
       />
       <KpiCard
         label="Inadimplência"
@@ -69,6 +79,15 @@ export function KpiRow() {
         comparacaoAnterior={inadimplenciaAnterior}
         rodape={`${inadimplentesQtd} fam${inadimplentesQtd !== 1 ? "ílias" : "ília"} em atraso`}
       />
+      {totalRenegociado > 0 && (
+        <p className="text-xs text-muted-foreground md:col-span-2 xl:col-span-4">
+          {renegociadas.length === 1
+            ? `1 mensalidade renegociada de ${formatBRL(totalRenegociado)} está contada acima`
+            : `${renegociadas.length} mensalidades renegociadas somando ${formatBRL(totalRenegociado)} estão contadas acima`}{" "}
+          — em “a receber” ou em “inadimplência”, conforme o novo vencimento. O valor cobrado antes do acordo não fica
+          guardado pelo sistema: anote-o no histórico do aluno antes de renegociar.
+        </p>
+      )}
     </div>
   );
 }

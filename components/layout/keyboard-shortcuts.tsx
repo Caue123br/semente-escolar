@@ -29,7 +29,7 @@ const ATALHOS_LISTA = [
       { k: ["⌘", "K"], desc: "Abrir busca rápida" },
       { k: ["?"], desc: "Ver atalhos de teclado" },
       { k: ["⌥", "⇧", "P"], desc: "Modo apresentação" },
-      { k: ["Esc"], desc: "Fechar diálogos" },
+      { k: ["Esc"], desc: "Fechar a busca rápida e sair do modo apresentação" },
     ],
   },
   {
@@ -52,6 +52,50 @@ const ATALHOS_LISTA = [
   },
 ];
 
+const CHAVE_APRESENTACAO = "semente:apresentacao";
+
+// Usado só para não disparar atalho de navegação com modal na tela: os modais
+// do app são overlays `fixed inset-0` montados enquanto abertos (os de Radix
+// trazem role="dialog"). O próprio painel de atalhos é marcado com
+// data-atalhos-painel para não se contar como diálogo de terceiros.
+const SELETOR_DIALOGO =
+  '[role="dialog"],[aria-modal="true"],.fixed.inset-0:not([data-atalhos-painel])';
+
+function existeDialogoAberto(): boolean {
+  return document.querySelector(SELETOR_DIALOGO) !== null;
+}
+
+// Atalho global não pode roubar tecla de quem está preenchendo: num <select>
+// (nativo ou combobox do Radix) a letra é typeahead do campo, e antes ela também
+// disparava "G + letra", navegando e descartando a matrícula em digitação.
+function digitandoEmCampo(el: HTMLElement | null): boolean {
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  if (["INPUT", "TEXTAREA", "SELECT", "OPTION"].includes(el.tagName)) return true;
+  return el.closest('[role="combobox"],[role="listbox"],[role="textbox"]') !== null;
+}
+
+// Sair pelo próprio botão mantém classe no <html>, estado do componente e
+// localStorage em sincronia — o modo apresentação é persistido entre sessões.
+function sairDoModoApresentacao(): boolean {
+  const html = document.documentElement;
+  if (!html.classList.contains("modo-apresentacao")) return false;
+  const botao = document.querySelector<HTMLButtonElement>(
+    'button[title^="Modo apresentação"]'
+  );
+  if (botao) {
+    botao.click();
+    return true;
+  }
+  html.classList.remove("modo-apresentacao");
+  try {
+    localStorage.removeItem(CHAVE_APRESENTACAO);
+  } catch {
+    // Navegador sem storage: tirar a classe já devolve a tela normal.
+  }
+  return true;
+}
+
 export function KeyboardShortcuts() {
   const router = useRouter();
   const [aberto, setAberto] = React.useState(false);
@@ -59,21 +103,34 @@ export function KeyboardShortcuts() {
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // Ignora se está digitando em campo
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) {
+
+      // Esc é a saída do modo apresentação, cujo botão de sair fica embaixo dos
+      // overlays. Fora do modo o bloco é inócuo: sairDoModoApresentacao() só age
+      // com a classe no <html>.
+      if (e.key === "Escape") {
+        setAguardandoG(false);
+        if (aberto) {
+          setAberto(false);
+          return;
+        }
+        // Popup de Radix (Select, DropdownMenu, Dialog) trata Escape no capture
+        // do document e marca defaultPrevented ao fechar — aí a tecla já tem
+        // dono e não pode derrubar a apresentação junto. Idem com foco em campo,
+        // onde Esc limpa ou desfoca o que está sendo digitado. Já os modais
+        // próprios do app (`fixed inset-0`, sem handler de teclado) fecham no X
+        // ou clicando fora: esperar por eles só deixaria o Esc sem efeito.
+        if (e.defaultPrevented || digitandoEmCampo(t)) return;
+        if (sairDoModoApresentacao()) e.preventDefault();
         return;
       }
+
+      // Ignora se está digitando em campo ou se há diálogo/modal aberto
+      if (digitandoEmCampo(t) || existeDialogoAberto()) return;
 
       if (e.key === "?" && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         setAberto((v) => !v);
-        return;
-      }
-
-      if (e.key === "Escape") {
-        setAberto(false);
-        setAguardandoG(false);
         return;
       }
 
@@ -98,7 +155,7 @@ export function KeyboardShortcuts() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [aguardandoG, router]);
+  }, [aberto, aguardandoG, router]);
 
   return (
     <>
@@ -112,6 +169,7 @@ export function KeyboardShortcuts() {
       {/* Painel de atalhos */}
       {aberto && (
         <div
+          data-atalhos-painel=""
           className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
           onClick={() => setAberto(false)}
         >

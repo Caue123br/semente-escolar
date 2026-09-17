@@ -8,12 +8,16 @@ import { formatDateLocalISO } from "@/lib/utils";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// Toda tabela do schema `app` em que o produto escreve precisa estar aqui: esta
+// é a única cópia dos dados da escola que a diretora consegue baixar sozinha e
+// também serve de portabilidade LGPD. Ao criar tabela nova, inclua na lista.
 const TABELAS: readonly DatabaseTable[] = [
   "escolas",
   "turmas",
   "alunos",
   "responsaveis",
   "mensalidades",
+  "cobrancas",
   "despesas",
   "vendas",
   "estoque",
@@ -53,6 +57,10 @@ export async function GET() {
   const sb = getDatabase();
   const exportacao: Record<string, unknown[]> = {};
 
+  // TODO(auditoria): o query builder sempre filtra `deleted_at IS NULL`, então
+  // aluno ou funcionário excluído não entra nesta exportação. Para o backup
+  // cobrir exclusão por engano, o builder precisa de uma forma de incluir
+  // registros excluídos (lib/db/postgres.ts, fora do escopo desta frente).
   for (const tabela of TABELAS) {
     const query = sb.from(tabela).select("*");
     if (tabela === "escolas") query.eq("id", u.escolaId);
@@ -72,11 +80,11 @@ export async function GET() {
     {
       exportadoEm: new Date().toISOString(),
       tipo: "exportacao_operacional",
-      versao: "1.1",
+      versao: "1.2",
       aviso:
         "Esta exportação não substitui o backup do PostgreSQL e dos arquivos privados da infraestrutura.",
       escopo:
-        "Tabelas operacionais da escola; não inclui credenciais, sessões, logs de auditoria nem arquivos enviados.",
+        "Tabelas operacionais da escola, incluindo a ficha financeira (mensalidades e cobranças); não inclui credenciais, sessões, logs de auditoria, arquivos enviados nem alunos e funcionários excluídos.",
       dados: exportacao,
     },
     null,

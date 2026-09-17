@@ -13,6 +13,9 @@ const contentSecurityPolicy = [
   "style-src 'self' 'unsafe-inline'",
   "script-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
+  // Mantido fechado de propósito: nenhuma chamada do navegador sai do app.
+  // Consulta externa (ex.: ViaCEP no autofill de CEP) passa por rota interna
+  // — app/api/cep/route.ts —, que busca no servidor e devolve o endereço.
   "connect-src 'self'",
 ].join("; ");
 

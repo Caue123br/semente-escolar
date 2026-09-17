@@ -20,26 +20,29 @@ import { Badge } from "@/components/ui/badge";
 import { formatBRL, formatDateBR } from "@/lib/utils";
 import { useEntidade } from "@/lib/data/store";
 import { usePeriodoContexto } from "@/lib/contexto-periodo";
+import { recebidoDe } from "@/lib/financeiro-mensalidades";
 
 export function ConciliacaoTab() {
   const { periodo } = usePeriodoContexto();
   const { items: mensalidades } = useEntidade("mensalidades");
   const { items: vendas } = useEntidade("vendas");
 
-  // Lançamentos = mensalidades pagas + vendas no mês
-  const mensPagas = mensalidades.filter(
-    (m) => m.competencia === periodo.competencia && m.status === "Paga"
+  // Lançamentos = o que entrou de mensalidade no mês + vendas. Entra pelo critério
+  // único de lib/financeiro-mensalidades: competência recebida só em parte também
+  // é entrada no banco, senão o total conciliado fica menor que o recebido do DRE.
+  const mensRecebidas = mensalidades.filter(
+    (m) => m.competencia === periodo.competencia && recebidoDe(m) > 0
   );
   const vendasMes = vendas.filter((v) => v.data >= periodo.inicio && v.data <= periodo.fim);
 
   const lancamentos = [
-    ...mensPagas.map((m) => ({
+    ...mensRecebidas.map((m) => ({
       id: m.id,
       data: m.dataPagamento ?? m.vencimento,
       descricao: `${m.formaPagamento ?? "Pagamento"} — ${m.alunoNome}`,
-      valor: m.valorPago ?? m.valor,
+      valor: recebidoDe(m),
       banco: m.formaPagamento === "Pix" ? "Pix" : m.formaPagamento === "Boleto" ? "Boleto" : "Conta",
-      origem: `Mensalidade ${m.competencia} · ${m.alunoNome}`,
+      origem: `Mensalidade ${m.competencia} · ${m.alunoNome}${m.status === "Paga" ? "" : " (recebimento parcial)"}`,
       status: "Conciliado" as const,
     })),
     ...vendasMes.map((v) => ({
@@ -80,9 +83,9 @@ export function ConciliacaoTab() {
           <div>
             <div className="font-semibold text-sm text-amber-900">Importar OFX bancário — em breve</div>
             <div className="text-xs text-amber-800 mt-1">
-              Por enquanto, considera-se que toda mensalidade marcada como paga e venda registrada
-              é uma entrada bancária conciliada. Pra conciliar com extrato real do banco, configure
-              integração com seu PSP / Open Finance.
+              Por enquanto, considera-se que todo valor recebido de mensalidade (inclusive recebimento
+              parcial) e toda venda registrada é uma entrada bancária conciliada. Pra conciliar com
+              extrato real do banco, configure integração com seu PSP / Open Finance.
             </div>
           </div>
         </div>
@@ -92,7 +95,7 @@ export function ConciliacaoTab() {
         <CardHeader>
           <CardTitle>Movimentação financeira de {periodo.label}</CardTitle>
           <CardDescription>
-            Entradas reconhecidas pelo sistema (mensalidades pagas + vendas)
+            Entradas reconhecidas pelo sistema (mensalidades recebidas + vendas)
           </CardDescription>
         </CardHeader>
         <CardContent className="px-0 overflow-x-auto">

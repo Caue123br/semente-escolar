@@ -61,3 +61,22 @@ export function podeAcessarModulo(perfil: Perfil, modulo: string): boolean {
 export function podeGerenciarAlunos(perfil: Perfil): boolean {
   return perfil === "diretor" || perfil === "coordenador";
 }
+
+/**
+ * Leitura do cadastro de alunos e turmas. Além dos perfis do módulo `alunos`,
+ * o financeiro precisa do responsável e da turma para cobrar — a escrita
+ * continua restrita a `podeGerenciarAlunos`.
+ */
+export function podeLerCadastroDeAlunos(perfil: Perfil): boolean {
+  return podeAcessarModulo(perfil, "alunos") || perfil === "financeiro";
+}
+
+/**
+ * Cobranças e mensalidades de um aluno formam a ficha financeira individual,
+ * que faz parte da matrícula — por isso a coordenação entra aqui. Não é o
+ * módulo `financeiro` inteiro: DRE, despesas e folha seguem fora do alcance
+ * da coordenação.
+ */
+export function podeVerFinanceiroDoAluno(perfil: Perfil): boolean {
+  return podeAcessarModulo(perfil, "financeiro") || perfil === "coordenador";
+}

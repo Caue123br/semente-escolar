@@ -19,9 +19,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useEntidade } from "@/lib/data/store";
+import { useEntidade, type OpcoesEscrita } from "@/lib/data/store";
 import { NovoLeadModal } from "@/components/shared/novo-lead-modal";
+import { NovaMatriculaModal } from "@/components/alunos/nova-matricula-modal";
+import { useToast } from "@/lib/toast";
 import { formatBRL, formatDateBR, initials, cn } from "@/lib/utils";
+import type { Aluno } from "@/lib/types";
 
 type EstagioFunil =
   | "Lead"
@@ -43,9 +46,68 @@ const ESTAGIOS: { id: EstagioFunil; cor: string; bg: string }[] = [
 ];
 
 export default function CrmPage() {
+  const toast = useToast();
   const { items: leads, update: updateLead } = useEntidade("crm");
   const [modalAberto, setModalAberto] = React.useState(false);
+  // Duas coisas separadas: a matrícula estar aberta e ela ainda estar ligada ao
+  // lead. Retomar um rascunho de outra criança solta o vínculo sem fechar a tela.
+  const [matriculaAberta, setMatriculaAberta] = React.useState(false);
   const [leadParaMatricular, setLeadParaMatricular] = React.useState<typeof leads[number] | null>(null);
+  const { items: turmas, carregando: turmasCarregando, erro: turmasErro } = useEntidade("turmas");
+  // A lista de alunos só é carregada quando a matrícula abre — o CRM não precisa
+  // dela para nada além de criar o aluno.
+  const { add: addAluno } = useEntidade("alunos", { habilitado: matriculaAberta });
+
+  const abrirMatricula = (lead: typeof leads[number]) => {
+    // Lista vazia tem três causas diferentes e cada uma pede uma ação
+    // diferente da secretária. Dizer "cadastre uma turma" para quem só está
+    // esperando o carregamento faz criar turma duplicada.
+    if (turmas.length === 0) {
+      if (turmasCarregando) {
+        toast.info("As turmas ainda estão carregando", "Tente de novo em alguns segundos.");
+        return;
+      }
+      if (turmasErro) {
+        toast.error(
+          "Não foi possível carregar as turmas",
+          "A matrícula precisa da lista de turmas. Recarregue a página e tente de novo."
+        );
+        return;
+      }
+      toast.warning(
+        "Cadastre uma turma antes",
+        "A matrícula precisa de uma turma para o aluno. Crie em Alunos → Nova turma."
+      );
+      return;
+    }
+    setLeadParaMatricular(lead);
+    setMatriculaAberta(true);
+  };
+
+  const fecharMatricula = () => {
+    setMatriculaAberta(false);
+    setLeadParaMatricular(null);
+  };
+
+  // O lead só avança para "Matriculado" depois que o aluno existe de verdade:
+  // se o cadastro falhar, o modal continua aberto e o funil não mente.
+  const matricularLead = async (aluno: Aluno, opcoes: OpcoesEscrita) => {
+    const lead = leadParaMatricular;
+    const criado = await addAluno(aluno, opcoes);
+    if (!lead) return criado;
+    try {
+      await updateLead(lead.id, { estagio: "Matriculado" });
+    } catch {
+      // O aluno já foi criado. Propagar o erro faria o modal continuar aberto e
+      // a secretária salvar de novo, criando matrícula duplicada.
+      toast.warning(
+        "Aluno matriculado, funil não atualizado",
+        `Mova ${lead.nomeResponsavel} para "Matriculado" no funil quando puder.`
+      );
+    }
+    return criado;
+  };
+
   const funilEstatisticas = React.useMemo(() => {
     const agora = new Date();
     const prefixoMes = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}`;
@@ -232,7 +294,7 @@ export default function CrmPage() {
                         size="sm"
                         variant="default"
                         className="ml-1 bg-emerald-600 hover:bg-emerald-700 h-8 text-xs"
-                        onClick={() => setLeadParaMatricular(lead)}
+                        onClick={() => abrirMatricula(lead)}
                       >
                         Matricular →
                       </Button>
@@ -278,57 +340,33 @@ export default function CrmPage() {
 
       <NovoLeadModal aberto={modalAberto} onFechar={() => setModalAberto(false)} />
 
-      <MatricularLeadModal
-        lead={leadParaMatricular}
-        onFechar={() => setLeadParaMatricular(null)}
-        onMatriculado={async () => {
-          if (leadParaMatricular) {
-            await updateLead(leadParaMatricular.id, { estagio: "Matriculado" });
+      {matriculaAberta && (
+        <NovaMatriculaModal
+          aberto
+          onClose={fecharMatricula}
+          turmas={turmas}
+          onSalvar={matricularLead}
+          // O lead guarda só a idade da criança: data de nascimento não se
+          // adivinha, a secretária preenche na etapa 1.
+          dadosIniciais={
+            leadParaMatricular
+              ? {
+                  nome: leadParaMatricular.nomeCrianca,
+                  responsaveis: [
+                    {
+                      nome: leadParaMatricular.nomeResponsavel,
+                      telefone: leadParaMatricular.telefone,
+                      email: leadParaMatricular.email,
+                    },
+                  ],
+                }
+              : undefined
           }
-          setLeadParaMatricular(null);
-        }}
-      />
-    </div>
-  );
-}
-
-function MatricularLeadModal({
-  lead,
-  onFechar,
-  onMatriculado,
-}: {
-  lead: { id: string; nomeResponsavel: string; nomeCrianca: string; idadeCrianca: number; serieInteresse: string; telefone: string; email: string } | null;
-  onFechar: () => void;
-  onMatriculado: () => Promise<void>;
-}) {
-  if (!lead) return null;
-  return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onFechar}>
-      <div className="w-full max-w-md bg-popover rounded-2xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
-        <div className="p-6 border-b">
-          <h2 className="font-bold text-lg">Converter lead em aluno</h2>
-          <p className="text-xs text-muted-foreground">
-            Esta ação apenas marca o lead como &quot;Matriculado&quot;. O cadastro do aluno continua sendo uma etapa separada.
-          </p>
-        </div>
-        <div className="p-6 space-y-3">
-          <div className="rounded-lg bg-muted/40 p-3 text-sm space-y-1">
-            <div><strong>Responsável:</strong> {lead.nomeResponsavel}</div>
-            <div><strong>Criança:</strong> {lead.nomeCrianca} ({lead.idadeCrianca} anos)</div>
-            <div><strong>Série interesse:</strong> {lead.serieInteresse}</div>
-            <div><strong>Contato:</strong> {lead.telefone} · {lead.email}</div>
-          </div>
-          <div className="text-xs text-muted-foreground">
-            👉 Próximo passo: vá em <strong>Alunos → Nova matrícula</strong> e preencha a ficha completa.
-          </div>
-        </div>
-        <div className="border-t bg-muted/30 p-4 flex justify-end gap-2">
-          <Button variant="outline" onClick={onFechar}>Cancelar</Button>
-          <Button onClick={onMatriculado} className="bg-emerald-600 hover:bg-emerald-700">
-            Marcar como matriculado
-          </Button>
-        </div>
-      </div>
+          // Rascunho retomado = formulário de outra criança. Solta o lead para o
+          // funil não marcar "Matriculado" para uma família que não foi matriculada.
+          onDesvincularOrigem={() => setLeadParaMatricular(null)}
+        />
+      )}
     </div>
   );
 }

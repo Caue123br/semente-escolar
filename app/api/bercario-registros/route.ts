@@ -14,14 +14,29 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const TIPOS = new Set(["Sono", "Troca", "Alimentação", "Banho", "Observação"]);
+/** A tela usa a rotina recente; o histórico completo é assunto de relatório. */
+const LIMITE_REGISTROS = 500;
 
 export async function GET() {
+  const usuario = await getUsuarioLogado();
+  if (!usuario) return erros.naoAutenticado();
   await seedBercario();
-  const { data, error } = await getDatabase()
+  const sb = getDatabase();
+  // Sem recorte por professora: `bercario_bebes.professora` é rótulo de
+  // exibição ("Profa. Vanessa") e não segue a convenção do nome de usuário nem
+  // de `turmas.professor_nome` ("Profa. Vanessa Oliveira"), então filtrar por
+  // ele devolve rotina vazia justo para quem cuida da sala. Quem pode abrir a
+  // tela é decidido pelo módulo `bercario` no proxy, e /api/bercario-bebes já
+  // lista todos os bebês para esses mesmos perfis.
+  // TODO(auditoria): recorte real depende de vínculo bebê -> aluno/turma
+  // (coluna nova em app.bercario_bebes); enquanto não existir, quem tem o
+  // módulo vê a rotina do berçário inteiro.
+  const { data, error } = await sb
     .from("bercario_registros")
     .select("*")
     .order("data", { ascending: false })
-    .order("hora", { ascending: false });
+    .order("hora", { ascending: false })
+    .limit(LIMITE_REGISTROS);
   if (error) return erros.servidorIndisponivel(error);
   return NextResponse.json({ items: (data ?? []).map(rowToRegistroBercario) });
 }

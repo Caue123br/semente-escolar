@@ -85,22 +85,33 @@ export function MensalidadesTable() {
   const confirmarMarcarPaga = async (forma: "Pix" | "Cartão" | "Dinheiro" | "Boleto", valorPago: number) => {
     if (!pagarModal) return;
     const { id, nome, valor } = pagarModal;
-    if (!mesmoValorEmCentavos(valorPago, valor)) {
+    if (!(Number.isFinite(valorPago) && valorPago > 0)) {
       toast.error(
-        "Valor diferente da mensalidade",
-        `Informe exatamente ${formatBRL(valor)}. O sistema ainda não controla pagamentos parciais, juros ou troco.`
+        "Valor recebido em falta",
+        "Informe quanto a família pagou (maior que zero) para dar baixa na mensalidade."
       );
       return;
     }
     const hoje = formatDateLocalISO();
+    // Grava o que entrou de verdade, não o previsto: bolsa, desconto de
+    // pontualidade e multa fazem o recebido divergir e a competência continua
+    // quitada (mesmo critério de lib/financeiro-mensalidades).
     await update(id, {
       status: "Paga",
-      valorPago: valor,
+      valorPago,
       dataPagamento: hoje,
       formaPagamento: forma,
       diasAtraso: 0,
     });
-    toast.success("Pagamento registrado!", `${nome} — ${formatBRL(valorPago)} via ${forma}`);
+    const diferenca = valorPago - valor;
+    toast.success(
+      "Pagamento registrado!",
+      mesmoValorEmCentavos(valorPago, valor)
+        ? `${nome} — ${formatBRL(valorPago)} via ${forma}`
+        : `${nome} — ${formatBRL(valorPago)} via ${forma}. Mensalidade quitada com ${
+            diferenca < 0 ? `${formatBRL(-diferenca)} a menos` : `${formatBRL(diferenca)} a mais`
+          } que os ${formatBRL(valor)} previstos.`
+    );
     setPagarModal(null);
   };
 
@@ -292,8 +303,14 @@ function RegistrarPagamentoModal({
 }) {
   const [forma, setForma] = React.useState<"Pix" | "Cartão" | "Dinheiro" | "Boleto">("Pix");
   const [valorPago, setValorPago] = React.useState(info.valor);
+  const [cienteDaDiferenca, setCienteDaDiferenca] = React.useState(false);
   const [salvando, setSalvando] = React.useState(false);
-  const valorExato = mesmoValorEmCentavos(valorPago, info.valor);
+  const valorValido = Number.isFinite(valorPago) && valorPago > 0;
+  // Receber valor diferente do previsto é rotina (bolsa, desconto de
+  // pontualidade, multa): não trava a baixa, mas a pessoa confirma a diferença
+  // antes, porque o que sobra ou falta não fica em aberto.
+  const temDiferenca = valorValido && !mesmoValorEmCentavos(valorPago, info.valor);
+  const diferenca = valorPago - info.valor;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -344,17 +361,43 @@ function RegistrarPagamentoModal({
               min={0.01}
               className="mt-1.5"
               value={valorPago}
-              onChange={(e) => setValorPago(Number(e.target.value))}
+              onChange={(e) => {
+                setValorPago(Number(e.target.value));
+                setCienteDaDiferenca(false);
+              }}
             />
-            {!valorExato && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Previsto: {formatBRL(info.valor)}
+            </p>
+            {!valorValido && (
               <div className="mt-1 text-xs text-danger">
-                Informe exatamente {formatBRL(info.valor)}. Pagamentos parciais, juros e troco ainda não são controlados por este cadastro.
+                Informe o valor recebido — tem de ser maior que zero.
               </div>
+            )}
+            {temDiferenca && (
+              <label className="mt-2 flex items-start gap-2 rounded-md border border-warning/50 bg-warning/10 p-2.5 text-xs">
+                <input
+                  type="checkbox"
+                  checked={cienteDaDiferenca}
+                  onChange={(e) => setCienteDaDiferenca(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0"
+                />
+                <span>
+                  {diferenca < 0
+                    ? `Baixa com ${formatBRL(-diferenca)} a menos que o previsto (desconto, bolsa ou abatimento). Esse valor não continua em aberto.`
+                    : `Baixa com ${formatBRL(diferenca)} a mais que o previsto (multa, juros ou acerto).`}{" "}
+                  Confiro o valor recebido e quito a mensalidade assim.
+                </span>
+              </label>
             )}
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onFechar}>Cancelar</Button>
-            <Button type="submit" disabled={salvando || !valorExato} className="bg-emerald-600 hover:bg-emerald-700">
+            <Button
+              type="submit"
+              disabled={salvando || !valorValido || (temDiferenca && !cienteDaDiferenca)}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
               {salvando ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Check className="mr-1 h-4 w-4" />}
               Confirmar pagamento
             </Button>

@@ -10,9 +10,10 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatBRL, formatDateBR } from "@/lib/utils";
+import { formatBRL, formatDateBR, formatDateLocalISO } from "@/lib/utils";
 import { useEntidade } from "@/lib/data/store";
 import { usePeriodoContexto } from "@/lib/contexto-periodo";
+import { dividaEmAberto, somaEmAberto } from "@/lib/financeiro-mensalidades";
 
 export function BoletosTab() {
   const { periodo } = usePeriodoContexto();
@@ -44,7 +45,10 @@ export function BoletosTab() {
 
   const taxaPix = pagas.length > 0 ? (pagasPix / pagas.length) * 100 : 0;
 
-  const aguardando = doMes.filter((m) => m.status === "A Vencer" || m.status === "Vence Hoje");
+  // Mesmo conjunto e mesmo valor do KPI "A receber (no prazo)": conta o que a
+  // família ainda deve, não o valor cheio da parcela já recebida em parte.
+  const aguardando = dividaEmAberto(doMes, formatDateLocalISO()).aVencer;
+  const aguardandoValor = somaEmAberto(aguardando);
 
   return (
     <div className="space-y-4">
@@ -57,7 +61,7 @@ export function BoletosTab() {
         <Card className="p-5">
           <div className="text-xs uppercase text-muted-foreground">Aguardando pagamento</div>
           <div className="mt-1 text-2xl font-bold text-warning">{aguardando.length}</div>
-          <div className="text-xs text-muted-foreground mt-1">{formatBRL(aguardando.reduce((a, m) => a + m.valor, 0))} a receber</div>
+          <div className="text-xs text-muted-foreground mt-1">{formatBRL(aguardandoValor)} a receber</div>
         </Card>
         <Card className="p-5">
           <div className="text-xs uppercase text-muted-foreground">Taxa de pagamento via Pix</div>

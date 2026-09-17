@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getDatabase } from "@/lib/db/postgres";
 import { erroAPI, erros } from "@/lib/db/api-response";
 import { registrarAudit } from "@/lib/db/audit";
+import { MENSAGEM_LINHA_DO_ESPELHO, ehLinhaDoEspelho } from "@/lib/db/espelho-mensalidades";
+import { formatBRL } from "@/lib/utils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,8 +25,29 @@ function temCampo(objeto: Record<string, unknown>, campo: string): boolean {
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { error } = await getDatabase().from("mensalidades").delete().eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const sb = getDatabase();
+  const { data: atual, error: erroBusca } = await sb
+    .from("mensalidades")
+    .select("id, aluno_id, competencia, valor, valor_pago, status")
+    .eq("id", id)
+    .maybeSingle();
+  if (erroBusca) return erros.servidorIndisponivel(erroBusca);
+  if (!atual) return erros.naoEncontrado("Mensalidade");
+  // Linha do espelho pertence às cobranças: apagar aqui só a faria voltar na
+  // próxima sincronização.
+  if (ehLinhaDoEspelho(atual)) return erroAPI(MENSAGEM_LINHA_DO_ESPELHO, 409);
+
+  const { error } = await sb.from("mensalidades").delete().eq("id", id);
+  if (error) return erros.servidorIndisponivel(error);
+  await registrarAudit("excluir", "mensalidades", id, {
+    alunoId: String(atual.aluno_id),
+    antes: {
+      competencia: String(atual.competencia),
+      valor: formatBRL(Number(atual.valor)),
+      valorPago: atual.valor_pago == null ? null : formatBRL(Number(atual.valor_pago)),
+      status: String(atual.status),
+    },
+  });
   return NextResponse.json({ ok: true });
 }
 
@@ -50,11 +73,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const sb = getDatabase();
   const { data: atual, error: erroBusca } = await sb
     .from("mensalidades")
-    .select("valor,valor_pago,status,data_pagamento,forma_pagamento")
+    .select("id,aluno_id,competencia,valor,valor_pago,status,data_pagamento,forma_pagamento")
     .eq("id", id)
     .maybeSingle();
   if (erroBusca) return erros.servidorIndisponivel(erroBusca);
   if (!atual) return erros.naoEncontrado("Mensalidade");
+  // Linha do espelho é derivada das cobranças do aluno: a próxima
+  // sincronização desfaria a alteração feita aqui, e a baixa registrada nesta
+  // tela desapareceria sem aviso.
+  if (ehLinhaDoEspelho(atual)) return erroAPI(MENSAGEM_LINHA_DO_ESPELHO, 409);
 
   const statusFinal = temCampo(update, "status") ? update.status : atual.status;
   const valorAtual = Number(atual.valor);
@@ -71,14 +98,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
   }
   if (statusFinal === "Paga") {
+    // Recebido diferente do previsto é rotina (bolsa, desconto de pontualidade,
+    // multa, arredondamento) e o banco já aceita — o que não pode faltar é o
+    // registro da baixa.
     const valorPagoFinal = Number(
       temCampo(update, "valor_pago") ? update.valor_pago : atual.valor_pago
     );
-    if (!mesmoValorEmCentavos(valorAtual, valorPagoFinal)) {
-      return erroAPI(
-        "Para marcar como paga, o valor recebido deve ser igual ao total da mensalidade. Pagamentos parciais ainda não são suportados.",
-        400
-      );
+    if (!(valorPagoFinal > 0)) {
+      return erroAPI("Informe o valor recebido para registrar o pagamento.", 400);
     }
     const dataPagamento = temCampo(update, "data_pagamento")
       ? update.data_pagamento
@@ -103,7 +130,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     .eq("id", id)
     .select("id")
     .maybeSingle();
-  if (error?.code === "23514") return erros.dadosInvalidos("pagamento");
+  if (error?.code === "23514") {
+    return erroAPI(
+      "Esta alteração não foi aceita. Confira o valor, o valor recebido, a data e a forma de pagamento.",
+      400
+    );
+  }
   if (error) return erros.servidorIndisponivel(error);
   if (!data) return erros.naoEncontrado("Mensalidade");
   await registrarAudit("editar", "mensalidades", id, {

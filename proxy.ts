@@ -1,3 +1,10 @@
+// Autorização de borda. Este proxy decide por MÓDULO (MODULOS_API para as APIs,
+// MODULO_POR_ROTA para as páginas) e, em poucos casos, por método de escrita.
+// Ele não sabe de quem é o dado: aluno, turma e responsável têm dono, e o
+// recorte por turma ou por vínculo com o responsável precisa ser checado dentro
+// do próprio handler/página (resolverEscopoProfessor de lib/db/professor-scope).
+// Passar por aqui significa "este perfil usa este módulo", nunca "este perfil
+// pode ver este aluno".
 import { NextRequest, NextResponse } from "next/server";
 
 import {
@@ -7,7 +14,11 @@ import {
 } from "@/lib/db/auth";
 import { verificarSessaoPais } from "@/lib/db/pais-session";
 import { getDatabase } from "@/lib/db/postgres";
-import { podeGerenciarAlunos } from "@/lib/access-control";
+import {
+  podeGerenciarAlunos,
+  podeLerCadastroDeAlunos,
+  podeVerFinanceiroDoAluno,
+} from "@/lib/access-control";
 import {
   MODULO_POR_ROTA,
   podeAcessarFicha,
@@ -109,9 +120,40 @@ function podeAcessarApi(
   const somenteLeitura = method === "GET" || method === "HEAD" || method === "OPTIONS";
   if (
     !somenteLeitura &&
-    pathInicia(pathname, ["/api/alunos", "/api/turmas", "/api/upload/foto-aluno"])
+    pathInicia(pathname, [
+      "/api/alunos",
+      "/api/turmas",
+      "/api/upload/foto-aluno",
+      // Cadastro de bebê é cadastro de criança, como o de aluno; os registros
+      // do dia (/api/bercario-registros) seguem abertos a quem cuida da turma.
+      "/api/bercario-bebes",
+    ])
   ) {
     return podeGerenciarAlunos(perfil);
+  }
+  // O financeiro entra aqui porque cobra: precisa da turma e do responsável
+  // financeiro. Ele NÃO recebe a ficha inteira — GET /api/alunos projeta para
+  // esse perfil um recorte (id, nome, turma, matrícula, status e o responsável
+  // financeiro). Esta liberação e essa projeção andam juntas: sem ela o
+  // financeiro passa a ver CPF/RG, endereço e ficha de saúde da criança.
+  if (somenteLeitura && pathInicia(pathname, ["/api/alunos", "/api/turmas"])) {
+    return podeLerCadastroDeAlunos(perfil);
+  }
+  // A ficha financeira do aluno é parte da matrícula: a coordenação monta o
+  // plano de pagamento e registra o recebimento — ou seja, ler a ficha, gerar
+  // as cobranças do plano e dar baixa numa cobrança. Fora disso continua sendo
+  // do módulo financeiro: DELETE apaga a linha de verdade (não é exclusão
+  // reversível) e POST /api/cobrancas cria cobrança que não entra no espelho de
+  // mensalidades. Mensalidades a coordenação só lê.
+  const cobrancaDaMatricula =
+    (somenteLeitura && pathInicia(pathname, ["/api/cobrancas"])) ||
+    (method === "POST" && pathname === "/api/cobrancas/gerar") ||
+    (method === "PATCH" && pathname.startsWith("/api/cobrancas/"));
+  if (cobrancaDaMatricula) {
+    return podeVerFinanceiroDoAluno(perfil);
+  }
+  if (somenteLeitura && pathInicia(pathname, ["/api/mensalidades"])) {
+    return podeVerFinanceiroDoAluno(perfil);
   }
   const modulo = moduloDaApi(pathname);
   return !modulo || temPermissao(perfil, modulo);
@@ -121,7 +163,30 @@ function moduloDaApi(pathname: string): string | null {
   return MODULOS_API.find(([prefixo]) => pathInicia(pathname, [prefixo]))?.[1] ?? null;
 }
 
+// Toda requisição passa por aqui e o pool tem poucas conexões: sem cache, ler
+// modulos_config a cada chamada derruba o app numa rajada. Janela curta para
+// ligar/desligar módulo continuar valendo quase na hora. A sessão fica de fora
+// de propósito — revogação de acesso tem que valer no mesmo instante.
+const MODULOS_CACHE_MS = 30_000;
+// O que dói no cache não é o desligamento (o módulo fica no ar um pouco mais),
+// é o LIGAMENTO: a diretora ativa em /configuracoes, a tela de configuração já
+// mostra ligado (o GET de /api/admin/modulos não passa por aqui) e a página do
+// módulo segue respondendo "Módulo desativado" — lê como botão que não
+// funcionou. Módulo desligado recebe pouca requisição, então reconsultar com
+// janela curta não pesa no pool.
+// TODO(auditoria): trocar a janela por invalidação explícita. Exportar
+// `invalidarCacheModulos(modulo)` de um módulo server-only (NÃO de
+// lib/access-control.ts, que é importado por client component e levaria estado
+// de servidor para o bundle) e chamá-lo no PATCH de
+// app/api/admin/modulos/route.ts, logo depois do registrarAudit.
+const MODULOS_CACHE_DESATIVADO_MS = 3_000;
+const cacheModulos = new Map<string, { ativo: boolean; expiraEm: number }>();
+
 async function moduloEstaAtivo(modulo: string): Promise<boolean> {
+  const agora = Date.now();
+  const emCache = cacheModulos.get(modulo);
+  if (emCache && emCache.expiraEm > agora) return emCache.ativo;
+
   const { data, error } = await getDatabase()
     .from("modulos_config")
     .select("ativo")
@@ -130,7 +195,12 @@ async function moduloEstaAtivo(modulo: string): Promise<boolean> {
   if (error) throw new Error(`Não foi possível verificar o módulo ${modulo}`);
   // Instalações antigas podem ainda não ter o catálogo completo. A ausência de
   // configuração não deve derrubar uma funcionalidade que nunca foi desligada.
-  return data ? Boolean(data.ativo) : true;
+  const ativo = data ? Boolean(data.ativo) : true;
+  cacheModulos.set(modulo, {
+    ativo,
+    expiraEm: agora + (ativo ? MODULOS_CACHE_MS : MODULOS_CACHE_DESATIVADO_MS),
+  });
+  return ativo;
 }
 
 function podeAcessarPagina(pathname: string, perfil: Parameters<typeof temPermissao>[0]): boolean {
@@ -142,7 +212,11 @@ function podeAcessarPagina(pathname: string, perfil: Parameters<typeof temPermis
   const rota = ROTAS_PROTEGIDAS.find((prefixo) =>
     pathInicia(pathname, [prefixo])
   );
-  if (rota === "/ficha" && !podeAcessarFicha(perfil)) return false;
+  // Ficha e contrato expõem o mesmo conjunto: CPF/RG dos responsáveis,
+  // endereço, saúde e plano financeiro. Mesma trava para os dois.
+  if ((rota === "/ficha" || rota === "/contrato") && !podeAcessarFicha(perfil)) {
+    return false;
+  }
   const modulo = rota ? MODULO_POR_ROTA[rota] ?? rota.slice(1) : null;
   return !modulo || temPermissao(perfil, modulo);
 }

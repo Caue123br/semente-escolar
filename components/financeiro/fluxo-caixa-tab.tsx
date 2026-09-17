@@ -22,6 +22,7 @@ import {
 import { formatBRL } from "@/lib/utils";
 import { useEntidade } from "@/lib/data/store";
 import { usePeriodoContexto } from "@/lib/contexto-periodo";
+import { somaRecebida } from "@/lib/financeiro-mensalidades";
 import { MESES_PT_ABREV } from "@/components/shared/seletor-mes";
 
 export function FluxoCaixaTab() {
@@ -48,10 +49,9 @@ export function FluxoCaixaTab() {
       const ultimoDia = new Date(ano, m + 1, 0).getDate();
       const fimMes = `${ano}-${mm}-${String(ultimoDia).padStart(2, "0")}`;
 
-      // Entradas: mensalidades pagas + vendas
-      const entradaMens = mensalidades
-        .filter((mn) => mn.competencia === comp && mn.status === "Paga")
-        .reduce((a, mn) => a + (mn.valorPago ?? mn.valor), 0);
+      // Entradas: o que entrou de mensalidade na competência (mesmo critério dos
+      // KPIs e do DRE, em lib/financeiro-mensalidades) + vendas
+      const entradaMens = somaRecebida(mensalidades.filter((mn) => mn.competencia === comp));
       const entradaVendas = vendas
         .filter((v) => v.data >= inicioMes && v.data <= fimMes)
         .reduce((a, v) => a + v.total, 0);

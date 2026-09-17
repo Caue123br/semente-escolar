@@ -9,10 +9,33 @@ import {
   professorPodeAcessarAluno,
   resolverEscopoProfessor,
 } from "@/lib/db/professor-scope";
-import { formatDateLocalISO } from "@/lib/utils";
+import { FUSO_HORARIO_ESCOLA, formatDateLocalISO } from "@/lib/utils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const formatadorHoraEscola = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: FUSO_HORARIO_ESCOLA,
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
+
+/**
+ * Hora civil da escola em HH:MM:SS. Precisa ser o par de formatDateLocalISO:
+ * data e hora da intercorrência vêm do mesmo instante e do mesmo fuso, senão o
+ * registro de medicamento fica com hora incoerente com a data (o processo pode
+ * rodar em UTC).
+ */
+function formatHoraLocalISO(date: Date): string {
+  const partes = formatadorHoraEscola.formatToParts(date);
+  const hora = partes.find((parte) => parte.type === "hour")?.value;
+  const minuto = partes.find((parte) => parte.type === "minute")?.value;
+  const segundo = partes.find((parte) => parte.type === "second")?.value;
+  if (!hora || !minuto || !segundo) throw new Error("Não foi possível formatar a hora local");
+  return `${hora}:${minuto}:${segundo}`;
+}
 
 export async function GET(req: Request) {
   const usuario = await getUsuarioLogado();
@@ -82,11 +105,19 @@ export async function POST(req: Request) {
   const medicamentoNome = typeof body?.medicamentoNome === "string" ? body.medicamentoNome.trim() : "";
   const medicamentoDose = typeof body?.medicamentoDose === "string" ? body.medicamentoDose.trim() : "";
   const tipos = new Set(["febre", "queda", "medicamento", "mal_estar", "alergia", "higiene", "comportamento", "outros"]);
-  const dataRegistro = typeof body?.data === "string" && body.data ? body.data : formatDateLocalISO();
-  const hora = typeof body?.hora === "string" && body.hora ? body.hora : new Date().toTimeString().slice(0, 8);
+  const agora = new Date();
+  const dataRegistro = typeof body?.data === "string" && body.data ? body.data : formatDateLocalISO(agora);
+  const hora = typeof body?.hora === "string" && body.hora ? body.hora : formatHoraLocalISO(agora);
   const temperatura = body?.temperatura == null ? null : Number(body.temperatura);
   if (!alunoId || !tipos.has(body?.tipo) || descricao.length < 2 || descricao.length > 4_000) {
     return erros.dadosInvalidos("aluno, tipo ou descrição");
+  }
+  // Data e hora viajam juntas: casar a data informada com o relógio do servidor
+  // gravaria um registro de saúde com hora que não corresponde ao dia.
+  const enviouData = typeof body?.data === "string" && body.data.length > 0;
+  const enviouHora = typeof body?.hora === "string" && body.hora.length > 0;
+  if (enviouData !== enviouHora) {
+    return erroAPI("Para registrar em outra data, informe a data e a hora juntas.", 400);
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dataRegistro) || !/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(hora)) {
     return erros.dadosInvalidos("data ou hora");
@@ -125,7 +156,7 @@ export async function POST(req: Request) {
     registrado_por_id: u?.id ?? null,
     registrado_por_nome: u?.nome ?? "Sistema",
     notificou_pais: avisoAosResponsaveisConfirmado,
-    notificado_em: avisoAosResponsaveisConfirmado ? new Date().toISOString() : null,
+    notificado_em: avisoAosResponsaveisConfirmado ? agora.toISOString() : null,
   }).select("*").single();
   if (error || !data) return erros.servidorIndisponivel(error ?? new Error("INSERT de intercorrência sem retorno"));
   await registrarAudit("criar", "intercorrencias", id, { alunoId, tipo: body.tipo });
