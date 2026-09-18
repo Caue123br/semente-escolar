@@ -1,5 +1,11 @@
 import { notFound } from "next/navigation";
+import { getUsuarioLogado } from "@/lib/db/auth";
 import { getDatabase } from "@/lib/db/postgres";
+import {
+  professorPodeAcessarTurma,
+  resolverEscopoProfessor,
+  type EscopoProfessor,
+} from "@/lib/db/professor-scope";
 import { seedAlunos, seedTurmas, seedFrequencia } from "@/lib/db/seed";
 import { initials, formatDateBR, formatDateLocalISO } from "@/lib/utils";
 import { BoletimImprimir } from "./boletim-imprimir";
@@ -13,6 +19,8 @@ interface PageProps {
 
 export default async function BoletimPage({ params }: PageProps) {
   const { alunoId } = await params;
+  const usuario = await getUsuarioLogado();
+  if (!usuario) notFound();
   await Promise.all([seedAlunos(), seedTurmas(), seedFrequencia()]);
   const sb = getDatabase();
 
@@ -28,6 +36,20 @@ export default async function BoletimPage({ params }: PageProps) {
     bilingue: Boolean(alunoRaw.bilingue),
     responsaveis: Array.isArray(alunoRaw.responsaveis_json) ? alunoRaw.responsaveis_json : [],
   };
+
+  // O boletim é rotina do professor, mas só da turma dele: fora do escopo este
+  // aluno não existe para a conta. O gate do proxy é por módulo e não sabe de
+  // quem é o aluno, então o recorte tem que ser feito aqui.
+  // Falha de banco ao resolver o escopo não é "fora da sua turma": avisa o que
+  // aconteceu em vez de cair no erro genérico, que não diz nada à professora.
+  let escopo: EscopoProfessor;
+  try {
+    escopo = await resolverEscopoProfessor(usuario);
+  } catch (error) {
+    console.error("[boletim] falha ao resolver o escopo do professor", error);
+    return <EscopoIndisponivel />;
+  }
+  if (!professorPodeAcessarTurma(escopo, aluno.turmaId)) notFound();
 
   // A turma precisa vir do banco; não inventamos dados quando o vínculo está ausente.
   const { data: turmaRaw } = await sb.from("turmas").select("*").eq("id", aluno.turmaId).maybeSingle();
@@ -274,6 +296,20 @@ export default async function BoletimPage({ params }: PageProps) {
           </div>
         </section>
       </main>
+    </div>
+  );
+}
+
+function EscopoIndisponivel() {
+  return (
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
+      <div className="max-w-md rounded-lg border border-gray-200 bg-white p-6 text-center shadow">
+        <h1 className="text-lg font-bold">Boletim indisponível agora</h1>
+        <p className="mt-2 text-sm text-gray-600">
+          Não foi possível confirmar quais turmas são suas. Recarregue a página em
+          alguns instantes; se continuar assim, avise a secretaria.
+        </p>
+      </div>
     </div>
   );
 }

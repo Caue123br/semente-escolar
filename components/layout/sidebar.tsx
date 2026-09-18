@@ -31,6 +31,7 @@ import {
   Shield,
   X,
 } from "lucide-react";
+import { apagarRascunhoMatricula } from "@/lib/data/store";
 import { MODULO_POR_ROTA, rotaSomenteDiretor } from "@/lib/navigation-access";
 import { cn } from "@/lib/utils";
 import { podeVer as podeVerModulo, usePerfil } from "@/lib/perfil-context";
@@ -234,7 +235,15 @@ function SidebarContent({ onLinkClick }: SidebarContentProps) {
             ?
           </kbd>
         </button>
-        <form action="/api/auth/logout" method="POST" className="w-full">
+        {/* O POST navega (sem JS). O onSubmit roda antes da navegação e é
+            síncrono: o rascunho de matrícula, com CPF/RG/endereço da família,
+            não fica no computador compartilhado depois da troca de usuário. */}
+        <form
+          action="/api/auth/logout"
+          method="POST"
+          className="w-full"
+          onSubmit={() => apagarRascunhoMatricula()}
+        >
           <button
             type="submit"
             className="w-full flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"

@@ -15,7 +15,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useEntidade } from "@/lib/data/store";
 import { useToast } from "@/lib/toast";
 import { usePeriodoContexto } from "@/lib/contexto-periodo";
-import { formatBRL, initials, cn } from "@/lib/utils";
+import { diasAtrasoDe, dividaEmAberto, emAbertoDe, somaEmAberto } from "@/lib/financeiro-mensalidades";
+import { formatBRL, formatDateLocalISO, initials, cn } from "@/lib/utils";
 import type { Mensalidade } from "@/lib/types";
 
 function faixaAtraso(dias: number): { label: string; cor: string; acao: string } {
@@ -42,11 +43,19 @@ export function ReguaInadimplencia() {
   const { periodo } = usePeriodoContexto();
   const toast = useToast();
 
-  const inadimplentes = mensalidades
-    .filter((m) => m.status === "Atrasada" && (!periodo.competencia || m.competencia === periodo.competencia))
-    .sort((a, b) => b.diasAtraso - a.diasAtraso);
+  const hoje = formatDateLocalISO();
 
-  const totalInad = inadimplentes.reduce((acc, m) => acc + m.valor, 0);
+  // Mesmo conjunto do KPI de inadimplência (dividaEmAberto): a renegociada que
+  // estourou o novo vencimento também é dívida em atraso e precisa aparecer
+  // aqui — esta é a única tela com o botão de cobrança.
+  const doMes = mensalidades.filter((m) => m.competencia === periodo.competencia);
+  const inadimplentes = dividaEmAberto(doMes, hoje).atrasadas.sort(
+    (a, b) => diasAtrasoDe(b, hoje) - diasAtrasoDe(a, hoje)
+  );
+
+  // Cobra o que falta, não o valor cheio da parcela: mês recebido em parte já
+  // tem valor_pago no espelho, e cobrar o total de novo é cobrança indevida.
+  const totalInad = somaEmAberto(inadimplentes);
 
   const responsavel = (alunoId: string) => {
     const a = alunos.find((al) => al.id === alunoId);
@@ -64,12 +73,13 @@ export function ReguaInadimplencia() {
       toast.error("Telefone inválido", "Revise o telefone do responsável antes de cobrar");
       return;
     }
+    const dias = diasAtrasoDe(m, hoje);
     const templateKey =
-      m.diasAtraso <= 7 ? "Cordial (até 7 dias)"
-      : m.diasAtraso <= 15 ? "Formal (até 15 dias)"
-      : m.diasAtraso <= 30 ? "Negociação (até 30 dias)"
+      dias <= 7 ? "Cordial (até 7 dias)"
+      : dias <= 15 ? "Formal (até 15 dias)"
+      : dias <= 30 ? "Negociação (até 30 dias)"
       : "Última (30+ dias)";
-    const texto = TEMPLATES_COBRANCA[templateKey](resp.nome, m.alunoNome, formatBRL(m.valor), m.diasAtraso);
+    const texto = TEMPLATES_COBRANCA[templateKey](resp.nome, m.alunoNome, formatBRL(emAbertoDe(m)), dias);
     const telComDDI = telSemMais.startsWith("55") ? telSemMais : `55${telSemMais}`;
     const janela = window.open(
       `https://wa.me/${telComDDI}?text=${encodeURIComponent(texto)}`,
@@ -106,7 +116,8 @@ export function ReguaInadimplencia() {
         ) : (
           inadimplentes.map((m) => {
             const resp = responsavel(m.alunoId);
-            const f = faixaAtraso(m.diasAtraso);
+            const dias = diasAtrasoDe(m, hoje);
+            const f = faixaAtraso(dias);
             return (
               <div key={m.id} className="rounded-lg border bg-card p-4">
                 <div className="flex flex-wrap items-center gap-4">
@@ -128,18 +139,28 @@ export function ReguaInadimplencia() {
                   </div>
 
                   <div className="flex flex-col text-sm">
-                    <span className="text-muted-foreground text-xs">Valor</span>
-                    <span className="font-semibold">{formatBRL(m.valor)}</span>
+                    <span className="text-muted-foreground text-xs">Em aberto</span>
+                    <span className="font-semibold">{formatBRL(emAbertoDe(m))}</span>
+                    {emAbertoDe(m) < m.valor && (
+                      <span className="text-[11px] text-muted-foreground">
+                        de {formatBRL(m.valor)} · {formatBRL(m.valorPago ?? 0)} já recebido
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex flex-col text-sm">
                     <span className="text-muted-foreground text-xs">Atraso</span>
                     <div className="flex items-center gap-1.5">
                       <span className={cn("h-2 w-2 rounded-full", f.cor)} />
-                      <span className="font-semibold">{m.diasAtraso} dias</span>
+                      <span className="font-semibold">{dias} dias</span>
                       <Badge variant="outline" className="ml-1 text-[10px]">
                         {f.label}
                       </Badge>
+                      {m.status === "Renegociada" && (
+                        <Badge variant="secondary" className="text-[10px]">
+                          acordo vencido
+                        </Badge>
+                      )}
                     </div>
                   </div>
 

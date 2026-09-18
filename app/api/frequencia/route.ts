@@ -70,23 +70,81 @@ function normalizarRegistrosChamada(valor: unknown): RegistroChamada[] | null {
   return registros;
 }
 
-export async function GET() {
+// Sem filtro, devolve a janela recente em vez do ano inteiro: a tela de
+// frequência olha os últimos 30 dias e a chamada do dia. O limite é rede de
+// segurança — quem precisa de histórico maior pede `de`/`ate` ou `mes`.
+const JANELA_PADRAO_DIAS = 45;
+const LIMITE_PADRAO = 10_000;
+const LIMITE_MAXIMO = 20_000;
+
+function diasAntes(dataISO: string, dias: number): string {
+  const base = new Date(`${dataISO}T00:00:00Z`);
+  base.setUTCDate(base.getUTCDate() - dias);
+  return base.toISOString().slice(0, 10);
+}
+
+function ultimoDiaDoMes(mes: string): string {
+  const [ano, numeroMes] = mes.split("-").map(Number);
+  return new Date(Date.UTC(ano, numeroMes, 0)).toISOString().slice(0, 10);
+}
+
+export async function GET(req: Request) {
   const usuario = await getUsuarioLogado();
   if (!usuario) return erros.naoAutenticado();
+
+  const params = new URL(req.url).searchParams;
+  const mes = params.get("mes")?.trim() ?? "";
+  const turmaId = params.get("turmaId")?.trim() ?? "";
+  let de = params.get("de")?.trim() ?? "";
+  let ate = params.get("ate")?.trim() ?? "";
+
+  if (mes) {
+    if (!/^\d{4}-\d{2}$/.test(mes) || !dataCivilValida(`${mes}-01`)) {
+      return erros.dadosInvalidos("mês (use AAAA-MM)");
+    }
+    de = `${mes}-01`;
+    ate = ultimoDiaDoMes(mes);
+  }
+  if (de && !dataCivilValida(de)) return erros.dadosInvalidos("data inicial");
+  if (ate && !dataCivilValida(ate)) return erros.dadosInvalidos("data final");
+  if (!ate) ate = formatDateLocalISO();
+  if (!de) de = diasAntes(ate, JANELA_PADRAO_DIAS);
+  if (de > ate) return erros.dadosInvalidos("período (a data inicial vem depois da final)");
+
+  const limitePedido = Number(params.get("limite") ?? "");
+  const limite = Number.isFinite(limitePedido) && limitePedido > 0
+    ? Math.min(Math.trunc(limitePedido), LIMITE_MAXIMO)
+    : LIMITE_PADRAO;
+
   await seedFrequencia();
   const sb = getDatabase();
-  let query = sb.from("frequencia").select("*").order("data", { ascending: false });
+  let query = sb
+    .from("frequencia")
+    .select("*")
+    .gte("data", de)
+    .lte("data", ate)
+    .order("data", { ascending: false });
+  if (turmaId) query = query.eq("turma_id", turmaId);
   try {
     const escopo = await resolverEscopoProfessor(usuario);
     if (escopo.restrito) {
+      if (turmaId && !professorPodeAcessarTurma(escopo, turmaId)) {
+        return erros.semPermissao("ver a frequência de outras turmas");
+      }
       query = query.in("aluno_id", await listarAlunosDoEscopoProfessor(escopo));
     }
   } catch (error) {
     return erros.servidorIndisponivel(error);
   }
-  const { data, error } = await query;
+  // Busca uma linha além do limite só pra saber se sobrou registro de fora.
+  const { data, error } = await query.limit(limite + 1);
   if (error) return erros.servidorIndisponivel(error);
-  return NextResponse.json({ items: (data ?? []).map(rowToFrequencia) });
+  const linhas = data ?? [];
+  return NextResponse.json({
+    items: linhas.slice(0, limite).map(rowToFrequencia),
+    periodo: { de, ate },
+    truncado: linhas.length > limite,
+  });
 }
 
 export async function POST(req: Request) {

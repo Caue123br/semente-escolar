@@ -83,11 +83,18 @@
   }
 }
 
-/* Modo apresentação - esconde elementos secundários para foco máximo */
+/* Modo apresentação - esconde elementos secundários para foco máximo.
+   O controle de saída (botão fixo no canto inferior ESQUERDO) fica de fora do
+   display:none: o modo é guardado no localStorage, então esconder o próprio
+   botão deixava a pessoa presa na apresentação até limpar o navegador.
+   Esc também sai do modo (components/layout/keyboard-shortcuts.tsx). */
 html.modo-apresentacao aside,
 html.modo-apresentacao header,
-html.modo-apresentacao .fixed.bottom-6 {
+html.modo-apresentacao .fixed.bottom-6:not(.left-6) {
   display: none !important;
+}
+html.modo-apresentacao .fixed.bottom-6.left-6 {
+  display: flex !important;
 }
 html.modo-apresentacao main {
   padding: 3rem 4rem !important;

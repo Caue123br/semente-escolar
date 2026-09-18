@@ -17,6 +17,7 @@ import {
   Landmark,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { apagarRascunhoMatricula } from "@/lib/data/store";
 import { usePerfil } from "@/lib/perfil-context";
 import { useTema, type Tema } from "@/lib/theme-context";
 import { initials, cn } from "@/lib/utils";
@@ -136,6 +137,9 @@ export function UserMenu() {
           <div className="p-2">
             <button
               onClick={async () => {
+                // Computador compartilhado: o rascunho de matrícula guarda
+                // CPF/RG/endereço da criança e dos responsáveis. Sai com o usuário.
+                apagarRascunhoMatricula();
                 await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
                 router.replace("/login");
                 router.refresh();

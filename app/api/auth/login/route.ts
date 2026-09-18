@@ -9,7 +9,13 @@ import {
 } from "@/lib/db/auth";
 import { registrarAudit } from "@/lib/db/audit";
 import { getDatabase } from "@/lib/db/postgres";
-import { checkRateLimit } from "@/lib/db/rate-limit";
+import {
+  esperaLegivel,
+  registrarFalhaLogin,
+  registrarSucessoLogin,
+  verificarBloqueioConta,
+  verificarLimiteIpLogin,
+} from "@/lib/db/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,12 +34,15 @@ function clientIp(req: Request): string {
 }
 
 export async function POST(req: Request) {
-  // Rate limit: 8 tentativas / 5min por IP
+  // Limite por rede é folgado de propósito: a escola toda sai por um IP só.
+  // Quem segura força-bruta é o bloqueio progressivo por conta, mais abaixo.
   const rateLimitIp = clientIp(req);
-  const rl = checkRateLimit(`login:${rateLimitIp}`, 8, 5 * 60 * 1000);
-  if (!rl.ok) {
+  const limiteIp = verificarLimiteIpLogin("login", rateLimitIp);
+  if (!limiteIp.ok) {
     return NextResponse.json(
-      { error: `Muitas tentativas. Tente novamente em ${Math.ceil(rl.resetIn / 60)} minuto(s).` },
+      {
+        error: `Muitas tentativas de login vindas desta rede. Tente novamente em ${esperaLegivel(limiteIp.resetIn)}.`,
+      },
       { status: 429 }
     );
   }
@@ -57,12 +66,34 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Email e senha são obrigatórios" }, { status: 400 });
   }
 
+  // Bloqueio por conta e origem: quem errou a senha espera, e a dona da conta
+  // continua entrando de outra rede mesmo que alguém esteja errando de fora.
+  const bloqueioConta = verificarBloqueioConta("login", email, rateLimitIp);
+  if (!bloqueioConta.ok) {
+    return NextResponse.json(
+      {
+        error: `Por segurança, o acesso a esta conta a partir desta rede está bloqueado por ${esperaLegivel(bloqueioConta.resetIn)} depois de várias senhas erradas. Espere esse tempo ou peça à direção para redefinir sua senha.`,
+      },
+      { status: 429 }
+    );
+  }
+
   try {
     const u = await buscarUsuarioPorEmail(email);
     const senhaCorreta = await checarSenha(senha, u?.senhaHash ?? DUMMY_PASSWORD_HASH);
     if (!u || !u.ativo || !senhaCorreta) {
+      const bloqueio = registrarFalhaLogin("login", email, rateLimitIp);
+      if (!bloqueio.ok) {
+        return NextResponse.json(
+          {
+            error: `Email ou senha inválidos. Por segurança, o acesso a esta conta a partir desta rede ficou bloqueado por ${esperaLegivel(bloqueio.resetIn)}. Espere esse tempo ou peça à direção para redefinir sua senha.`,
+          },
+          { status: 429 }
+        );
+      }
       return NextResponse.json({ error: "Email ou senha inválidos" }, { status: 401 });
     }
+    registrarSucessoLogin("login", email, rateLimitIp);
 
     const { token, maxAge } = await criarSessao(u, {
       ip: rateLimitIp === "unknown" ? null : rateLimitIp,

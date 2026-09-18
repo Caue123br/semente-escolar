@@ -133,13 +133,41 @@ type ApiPayload = {
   [key: string]: unknown;
 };
 
+/**
+ * Erro de API que preserva status, código de conflito e corpo da resposta —
+ * sem isso a tela perde os candidatos da duplicata e a ocupação da turma.
+ */
+export class ErroApi extends Error {
+  readonly status: number;
+  readonly codigo?: string;
+  readonly payload: ApiPayload;
+
+  constructor(mensagem: string, status: number, payload: ApiPayload) {
+    super(mensagem);
+    this.name = "ErroApi";
+    this.status = status;
+    this.codigo = typeof payload.codigo === "string" ? payload.codigo : undefined;
+    this.payload = payload;
+  }
+}
+
+/** Conflitos resolvidos pela própria tela (mostra candidatos / pede confirmação). */
+const CODIGOS_TRATADOS_NA_TELA = new Set(["duplicata", "lotacao", "dados_divergentes"]);
+
+export interface OpcoesEscrita {
+  /** Vai no header Idempotency-Key: retentativa do mesmo preenchimento não cria dois registros. */
+  idempotencyKey?: string;
+  /** Campos extras no corpo (ex.: confirmarDuplicata / confirmarLotacao da matrícula). */
+  extras?: Record<string, unknown>;
+}
+
 async function lerResposta(r: Response): Promise<ApiPayload> {
   const data = (await r.json().catch(() => ({}))) as ApiPayload;
   if (!r.ok) {
     const mensagem = typeof data.error === "string"
       ? data.error
       : `O servidor respondeu com status ${r.status}`;
-    throw new Error(mensagem);
+    throw new ErroApi(mensagem, r.status, data);
   }
   return data;
 }
@@ -153,11 +181,22 @@ async function fetchApi<T>(url: string): Promise<T[]> {
   return data.items as T[];
 }
 
-async function postApi(url: string, body: unknown) {
+function cabecalhosEscrita(opcoes: OpcoesEscrita): Record<string, string> {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (opcoes.idempotencyKey) headers["Idempotency-Key"] = opcoes.idempotencyKey;
+  return headers;
+}
+
+function corpoComExtras(body: unknown, extras?: Record<string, unknown>) {
+  if (!extras || !body || typeof body !== "object" || Array.isArray(body)) return body;
+  return { ...(body as Record<string, unknown>), ...extras };
+}
+
+async function postApi(url: string, body: unknown, opcoes: OpcoesEscrita = {}) {
   const r = await fetch(url, {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    headers: cabecalhosEscrita(opcoes),
+    body: JSON.stringify(corpoComExtras(body, opcoes.extras)),
   });
   return lerResposta(r);
 }
@@ -167,11 +206,11 @@ async function deleteApi(url: string) {
   return lerResposta(r);
 }
 
-async function patchApi(url: string, body: unknown) {
+async function patchApi(url: string, body: unknown, opcoes: OpcoesEscrita = {}) {
   const r = await fetch(url, {
     method: "PATCH",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    headers: cabecalhosEscrita(opcoes),
+    body: JSON.stringify(corpoComExtras(body, opcoes.extras)),
   });
   return lerResposta(r);
 }
@@ -182,8 +221,15 @@ export function useEntidade<K extends keyof Entidades>(
   options: { habilitado?: boolean } = {}
 ): {
   items: Entidades[K];
-  add: (item: Entidades[K][number]) => Promise<Entidades[K][number] | null>;
-  update: (id: string, patch: Partial<Entidades[K][number]>) => Promise<void>;
+  add: (
+    item: Entidades[K][number],
+    opcoes?: OpcoesEscrita
+  ) => Promise<Entidades[K][number] | null>;
+  update: (
+    id: string,
+    patch: Partial<Entidades[K][number]>,
+    opcoes?: OpcoesEscrita
+  ) => Promise<void>;
   remove: (id: string) => Promise<void>;
   reset: () => void;
   carregando: boolean;
@@ -238,32 +284,66 @@ export function useEntidade<K extends keyof Entidades>(
     };
   }, [chave, carregar, habilitado]);
 
-  const add = async (item: Entidades[K][number]): Promise<Entidades[K][number] | null> => {
+  const add = async (
+    item: Entidades[K][number],
+    opcoes: OpcoesEscrita = {}
+  ): Promise<Entidades[K][number] | null> => {
     if (!apiUrl) return null;
     try {
-      const resposta = await postApi(apiUrl, item);
+      const resposta = await postApi(apiUrl, item, opcoes);
+      // A API responde 200 com `avisoDadosDivergentes` quando a chave de
+      // idempotência já gravou um registro e o conteúdo enviado agora é outro:
+      // o que a pessoa acabou de digitar NÃO entrou. Isso não é sucesso, então
+      // vira rejeição com código próprio — a tela mostra o que aconteceu em vez
+      // de anunciar um cadastro que não houve. O payload leva o registro que
+      // está gravado, para a tela poder apontar a ficha certa.
+      if (resposta.avisoDadosDivergentes === true) {
+        // O registro existe no servidor mas pode não estar na lista local (a
+        // resposta do primeiro envio se perdeu): recarrega para ele aparecer.
+        window.dispatchEvent(new CustomEvent(`semente:changed:${chave}`));
+        throw new ErroApi(
+          "Este envio já havia salvo o registro com os dados anteriores. A correção que você acabou de digitar não entrou.",
+          200,
+          { ...resposta, codigo: "dados_divergentes" }
+        );
+      }
       let criado: Entidades[K][number] | null = null;
       if (resposta.item && typeof resposta.item === "object") {
-        criado = resposta.item as Entidades[K][number];
-        setItems((anteriores) => [criado, ...(anteriores as unknown[])] as Entidades[K]);
+        const novo = resposta.item as Entidades[K][number];
+        criado = novo;
+        const novoId = (novo as { id?: string }).id;
+        setItems((anteriores) => {
+          const lista = anteriores as unknown as Array<{ id?: string }>;
+          // Resposta repetida por idempotência devolve o mesmo registro: não listar duas vezes.
+          const semRepetido = novoId ? lista.filter((i) => i?.id !== novoId) : lista;
+          return [novo, ...semRepetido] as unknown as Entidades[K];
+        });
       }
       window.dispatchEvent(new CustomEvent(`semente:changed:${chave}`));
       return criado;
     } catch (e) {
       console.warn(`[Escola Modelo] POST falhou`, e);
-      toast.error("Não foi possível salvar", formatarErro(e));
+      const tratadoNaTela =
+        e instanceof ErroApi && e.codigo !== undefined && CODIGOS_TRATADOS_NA_TELA.has(e.codigo);
+      if (!tratadoNaTela) toast.error("Não foi possível salvar", formatarErro(e));
       throw e;
     }
   };
 
-  const update = async (id: string, patch: Partial<Entidades[K][number]>) => {
+  const update = async (
+    id: string,
+    patch: Partial<Entidades[K][number]>,
+    opcoes: OpcoesEscrita = {}
+  ) => {
     if (!apiUrl) return;
     try {
-      await patchApi(`${apiUrl}/${id}`, patch);
+      await patchApi(`${apiUrl}/${id}`, patch, opcoes);
       window.dispatchEvent(new CustomEvent(`semente:changed:${chave}`));
     } catch (e) {
       console.warn(`[Escola Modelo] PATCH falhou`, e);
-      toast.error("Não foi possível salvar a alteração", formatarErro(e));
+      const tratadoNaTela =
+        e instanceof ErroApi && e.codigo !== undefined && CODIGOS_TRATADOS_NA_TELA.has(e.codigo);
+      if (!tratadoNaTela) toast.error("Não foi possível salvar a alteração", formatarErro(e));
       throw e;
     }
   };
@@ -289,7 +369,35 @@ export function getBackendMode(): "postgresql" {
   return "postgresql";
 }
 
-/** Remove apenas caches legados que versões antigas gravavam no navegador. */
+/**
+ * Chaves do rascunho local de matrícula: a atual (sob o prefixo que resetTudo
+ * varre) e a usada antes, fora do prefixo. Moram aqui porque quem apaga o
+ * rascunho não é só o modal de matrícula — os botões de sair também precisam,
+ * e o cabeçalho do dashboard não deve importar o modal inteiro só por isso.
+ */
+export const RASCUNHO_MATRICULA_CHAVE = `${STORAGE_PREFIX}rascunho:matricula`;
+export const RASCUNHO_MATRICULA_CHAVE_ANTIGA = "semente:rascunho:matricula";
+
+/**
+ * Apaga o rascunho de matrícula do navegador. Chamado quando a matrícula é
+ * salva ou descartada e nos dois botões de sair: em computador compartilhado da
+ * secretaria, CPF/RG/endereço de uma família não pode sobreviver à troca de
+ * usuário nem ficar no disco esperando o vencimento.
+ */
+export function apagarRascunhoMatricula() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(RASCUNHO_MATRICULA_CHAVE);
+    window.localStorage.removeItem(RASCUNHO_MATRICULA_CHAVE_ANTIGA);
+  } catch {
+    // Sem storage disponível: nada a limpar.
+  }
+}
+
+/**
+ * Remove o que o app guarda no navegador sob "semente:data:" — caches legados
+ * de versões antigas e rascunhos locais (ex.: rascunho de matrícula).
+ */
 export function resetTudo() {
   if (typeof window === "undefined") return;
   for (let i = window.localStorage.length - 1; i >= 0; i -= 1) {
