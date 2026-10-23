@@ -10,7 +10,8 @@
     "lint": "pnpm run typecheck",
     "typecheck": "tsc --noEmit --incremental false",
     "db:migrate": "node --env-file-if-exists=.env.local --env-file-if-exists=.env.development.local scripts/migrate.mjs",
-    "db:bootstrap-admin": "node --env-file-if-exists=.env.local --env-file-if-exists=.env.development.local scripts/bootstrap-admin.mjs"
+    "db:bootstrap-admin": "node --env-file-if-exists=.env.local --env-file-if-exists=.env.development.local scripts/bootstrap-admin.mjs",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.2",
@@ -30,14 +31,13 @@
     "clsx": "^2.1.1",
     "jsbarcode": "^3.12.3",
     "lucide-react": "^0.469.0",
-    "next": "16.2.9",
+    "next": "16.4.2",
     "pg": "^8.16.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^2.15.0",
-    "sharp": "^0.34.0",
-    "tailwind-merge": "^2.6.0",
-    "tailwindcss-animate": "^1.0.7"
+    "sharp": "0.35.5",
+    "tailwind-merge": "^2.6.0"
   },
   "devDependencies": {
     "@types/jsbarcode": "^3.11.4",
@@ -46,13 +46,18 @@
     "@types/react": "^19.0.4",
     "@types/react-dom": "^19.0.2",
     "autoprefixer": "^10.4.20",
-    "postcss": "^8.5.1",
+    "postcss": "8.5.31",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "tailwindcss-animate": "^1.0.7"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
       "sharp"
-    ]
+    ],
+    "overrides": {
+      "source-map-js@^1.2.1": "1.2.2",
+      "baseline-browser-mapping@^2.0.0": "2.11.31"
+    }
   }
 }

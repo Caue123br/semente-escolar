@@ -4,6 +4,9 @@ import { rowToMensalidade } from "@/lib/db/mappers";
 import { seedMensalidades } from "@/lib/db/seed";
 import { erroAPI, erros } from "@/lib/db/api-response";
 import { MENSAGEM_LINHA_DO_ESPELHO, ehLinhaDoEspelho } from "@/lib/db/espelho-mensalidades";
+import { projetarEspelhos } from "@/lib/financeiro-espelho";
+import { mensalidadeAtualizada } from "@/lib/financeiro-mensalidades";
+import { formatDateLocalISO } from "@/lib/utils";
 import type { Mensalidade } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -14,7 +17,15 @@ export async function GET() {
   const sb = getDatabase();
   const { data, error } = await sb.from("mensalidades").select("*").order("vencimento", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ items: (data ?? []).map(rowToMensalidade) });
+  // Projeta também espelhos já gravados por versões antigas: nenhum pagamento
+  // ou lançamento manual precisa ser reescrito para a leitura ficar correta.
+  const { data: cobrancas, error: erroCobrancas } = await sb.from("cobrancas")
+    .select("aluno_id, valor, valor_pago, vencimento, status, data_pagamento, forma_pagamento")
+    .eq("tipo", "mensalidade");
+  if (erroCobrancas) return erros.servidorIndisponivel(erroCobrancas);
+  const hoje = formatDateLocalISO();
+  const linhas = projetarEspelhos(data ?? [], cobrancas ?? [], hoje);
+  return NextResponse.json({ items: linhas.map((row) => mensalidadeAtualizada(rowToMensalidade(row), hoje)) });
 }
 
 export async function POST(req: Request) {

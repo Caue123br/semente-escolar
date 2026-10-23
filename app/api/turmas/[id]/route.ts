@@ -3,6 +3,7 @@ import { getUsuarioLogado } from "@/lib/db/auth";
 import { getDatabase } from "@/lib/db/postgres";
 import { registrarAudit } from "@/lib/db/audit";
 import { rowToTurma } from "@/lib/db/mappers";
+import { podeGerenciarAlunos } from "@/lib/access-control";
 import {
   professorPodeAcessarTurma,
   resolverEscopoProfessor,
@@ -20,6 +21,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const usuario = await getUsuarioLogado();
   if (!usuario) return erros.naoAutenticado();
+  if (!podeGerenciarAlunos(usuario.perfil)) return erros.semPermissao("gerenciar turmas");
   try {
     const escopo = await resolverEscopoProfessor(usuario);
     if (!professorPodeAcessarTurma(escopo, id)) {
@@ -42,6 +44,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params;
   const usuario = await getUsuarioLogado();
   if (!usuario) return erros.naoAutenticado();
+  if (!podeGerenciarAlunos(usuario.perfil)) return erros.semPermissao("gerenciar turmas");
   let patch: Record<string, unknown>;
   try {
     patch = (await req.json()) as Record<string, unknown>;
@@ -79,13 +82,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
   if (update.cor !== undefined && !/^#[0-9a-f]{6}$/i.test(String(update.cor))) return erros.dadosInvalidos("cor");
 
-  if (patch.professorId !== undefined) {
-    if (typeof patch.professorId !== "string") return erros.dadosInvalidos("professor");
-    const professorId = patch.professorId.trim();
+  if (patch.professorId !== undefined || patch.professorNome !== undefined) {
+    if (patch.professorId !== undefined && typeof patch.professorId !== "string") return erros.dadosInvalidos("professora");
+    const professorId = typeof patch.professorId === "string" ? patch.professorId.trim() : "";
     if (!professorId) {
+      if (typeof patch.professorNome !== "string") return erros.dadosInvalidos("nome da professora responsável");
+      const professorNome = patch.professorNome.trim();
+      if (professorNome && (professorNome.length < 2 || professorNome.length > 200)) {
+        return erros.dadosInvalidos("nome da professora responsável");
+      }
+      if (!professorNome && patch.professorId !== "") {
+        return erros.dadosInvalidos("confirme a remoção da professora responsável");
+      }
       update.professor_usuario_id = null;
       update.professor_id = null;
-      update.professor_nome = null;
+      update.professor_nome = professorNome || null;
     } else {
       const { data: professor, error: erroProfessor } = await getDatabase()
         .from("usuarios")

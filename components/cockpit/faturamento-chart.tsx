@@ -13,7 +13,8 @@ import {
 } from "recharts";
 import { AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { formatBRL } from "@/lib/utils";
+import { formatBRL, formatDateLocalISO } from "@/lib/utils";
+import { resumoFinanceiro } from "@/lib/financeiro-mensalidades";
 import { useEntidade } from "@/lib/data/store";
 import { MESES_PT_ABREV } from "@/components/shared/seletor-mes";
 
@@ -60,6 +61,12 @@ export function FaturamentoChart() {
     reset: recarregarMensalidades,
   } = useEntidade("mensalidades");
   const {
+    items: cobrancas,
+    carregando: carregandoCobrancas,
+    erro: erroCobrancas,
+    reset: recarregarCobrancas,
+  } = useEntidade("cobrancas");
+  const {
     items: vendas,
     carregando: carregandoVendas,
     erro: erroVendas,
@@ -80,12 +87,11 @@ export function FaturamentoChart() {
       const ultDia = new Date(ano, m + 1, 0).getDate();
       const fimMes = `${ano}-${mm}-${String(ultDia).padStart(2, "0")}`;
 
-      const doMes = mensalidades.filter((mn) => mn.competencia === comp);
-      const faturado = doMes.reduce((a, mn) => a + mn.valor, 0)
-        + vendas.filter((v) => v.data >= inicioMes && v.data <= fimMes).reduce((a, v) => a + v.total, 0);
-      const recebido = doMes.filter((mn) => mn.status === "Paga").reduce((a, mn) => a + (mn.valorPago ?? mn.valor), 0)
-        + vendas.filter((v) => v.data >= inicioMes && v.data <= fimMes).reduce((a, v) => a + v.total, 0);
-      const inad = doMes.filter((mn) => mn.status === "Atrasada").reduce((a, mn) => a + mn.valor, 0);
+      const resumo = resumoFinanceiro(mensalidades, cobrancas, comp, formatDateLocalISO());
+      const totalVendas = vendas.filter((v) => v.data >= inicioMes && v.data <= fimMes).reduce((s, v) => s + v.total, 0);
+      const faturado = resumo.faturado + totalVendas;
+      const recebido = resumo.recebido + totalVendas;
+      const inad = resumo.inadimplencia;
 
       lista.push({
         mes: `${MESES_PT_ABREV[m]}/${String(ano).slice(2)}`,
@@ -95,9 +101,9 @@ export function FaturamentoChart() {
       });
     }
     return lista;
-  }, [mensalidades, vendas]);
+  }, [mensalidades, cobrancas, vendas]);
 
-  if (carregandoMensalidades || carregandoVendas) {
+  if (carregandoMensalidades || carregandoCobrancas || carregandoVendas) {
     return (
       <Card className="flex min-h-[420px] items-center justify-center gap-2 text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" /> Carregando faturamento...
@@ -105,7 +111,7 @@ export function FaturamentoChart() {
     );
   }
 
-  if (erroMensalidades || erroVendas) {
+  if (erroMensalidades || erroCobrancas || erroVendas) {
     return (
       <Card className="flex min-h-[420px] flex-col items-center justify-center gap-2 p-8 text-center text-sm text-muted-foreground">
         <AlertCircle className="h-8 w-8 text-warning" />
@@ -114,6 +120,7 @@ export function FaturamentoChart() {
           type="button"
           onClick={() => {
             recarregarMensalidades();
+            recarregarCobrancas();
             recarregarVendas();
           }}
           className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"

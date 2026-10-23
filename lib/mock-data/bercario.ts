@@ -4,6 +4,7 @@ export interface BebeBercario {
   idadeMeses: number;
   responsavel: string;
   professora: string;
+  turmaId?: string | null;
 }
 
 export const bebesBercario: BebeBercario[] = [

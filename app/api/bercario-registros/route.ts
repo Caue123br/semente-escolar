@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { dataCivilValida, horaCurta, horaValida, objetoSimples, texto } from "@/lib/api-input";
+import { podeAcessarModulo } from "@/lib/access-control";
+import { listarBebesDoEscopoProfessor, professorPodeAcessarBebe, resolverEscopoProfessor } from "@/lib/db/professor-scope";
 import { registrarAudit } from "@/lib/db/audit";
 import { erros, sucesso } from "@/lib/db/api-response";
 import { getUsuarioLogado } from "@/lib/db/auth";
@@ -20,23 +22,18 @@ const LIMITE_REGISTROS = 500;
 export async function GET() {
   const usuario = await getUsuarioLogado();
   if (!usuario) return erros.naoAutenticado();
+  if (!podeAcessarModulo(usuario.perfil, "bercario")) return erros.semPermissao("acessar o berçário");
   await seedBercario();
   const sb = getDatabase();
-  // Sem recorte por professora: `bercario_bebes.professora` é rótulo de
-  // exibição ("Profa. Vanessa") e não segue a convenção do nome de usuário nem
-  // de `turmas.professor_nome` ("Profa. Vanessa Oliveira"), então filtrar por
-  // ele devolve rotina vazia justo para quem cuida da sala. Quem pode abrir a
-  // tela é decidido pelo módulo `bercario` no proxy, e /api/bercario-bebes já
-  // lista todos os bebês para esses mesmos perfis.
-  // TODO(auditoria): recorte real depende de vínculo bebê -> aluno/turma
-  // (coluna nova em app.bercario_bebes); enquanto não existir, quem tem o
-  // módulo vê a rotina do berçário inteiro.
-  const { data, error } = await sb
-    .from("bercario_registros")
-    .select("*")
-    .order("data", { ascending: false })
-    .order("hora", { ascending: false })
-    .limit(LIMITE_REGISTROS);
+  let query = sb.from("bercario_registros").select("*")
+    .order("data", { ascending: false }).order("hora", { ascending: false }).limit(LIMITE_REGISTROS);
+  try {
+    const escopo = await resolverEscopoProfessor(usuario);
+    if (escopo.restrito) query = query.in("bebe_id", await listarBebesDoEscopoProfessor(escopo));
+  } catch (error) {
+    return erros.servidorIndisponivel(error);
+  }
+  const { data, error } = await query;
   if (error) return erros.servidorIndisponivel(error);
   return NextResponse.json({ items: (data ?? []).map(rowToRegistroBercario) });
 }
@@ -44,6 +41,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const usuario = await getUsuarioLogado();
   if (!usuario) return erros.naoAutenticado();
+  if (!podeAcessarModulo(usuario.perfil, "bercario")) return erros.semPermissao("acessar o berçário");
   let body: unknown;
   try {
     body = await req.json();
@@ -71,6 +69,13 @@ export async function POST(req: Request) {
     .maybeSingle();
   if (erroBebe) return erros.servidorIndisponivel(erroBebe);
   if (!bebe) return erros.naoEncontrado("Bebê");
+
+  try {
+    const escopo = await resolverEscopoProfessor(usuario);
+    if (!(await professorPodeAcessarBebe(escopo, bebeId))) return erros.semPermissao("registrar rotina deste bebê");
+  } catch (error) {
+    return erros.servidorIndisponivel(error);
+  }
 
   const id = randomUUID();
   const { data, error } = await sb

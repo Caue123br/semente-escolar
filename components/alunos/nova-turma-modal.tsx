@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { GraduationCap, Loader2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ export function NovaTurmaModal({ aberto, onClose, onSalvar }: Props) {
   const [serie, setSerie] = React.useState<SerieEnum>("Maternal");
   const [turno, setTurno] = React.useState<Turno>("Manhã");
   const [professorId, setProfessorId] = React.useState("");
+  const [professorNome, setProfessorNome] = React.useState("");
   const [professores, setProfessores] = React.useState<Array<{ id: string; nome: string }>>([]);
   const [erroProfessores, setErroProfessores] = React.useState<string | null>(null);
   const [capacidade, setCapacidade] = React.useState("20");
@@ -35,6 +37,7 @@ export function NovaTurmaModal({ aberto, onClose, onSalvar }: Props) {
     setSerie("Maternal");
     setTurno("Manhã");
     setProfessorId("");
+    setProfessorNome("");
     setCapacidade("20");
     setCor("#059669");
   };
@@ -84,7 +87,9 @@ export function NovaTurmaModal({ aberto, onClose, onSalvar }: Props) {
         serie,
         turno,
         professorId,
-        professorNome: professores.find((professor) => professor.id === professorId)?.nome ?? "",
+        professorNome: professorId
+          ? professores.find((professor) => professor.id === professorId)?.nome ?? ""
+          : professorNome.trim(),
         totalAlunos: 0,
         capacidade: capacidadeNumero,
         cor,
@@ -168,14 +173,14 @@ export function NovaTurmaModal({ aberto, onClose, onSalvar }: Props) {
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_120px_72px]">
             <div>
-              <Label htmlFor="turma-professor">Professor(a)</Label>
+              <Label htmlFor="turma-professor">Professora com acesso (opcional)</Label>
               <select
                 id="turma-professor"
                 className="mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={professorId}
                 onChange={(event) => setProfessorId(event.target.value)}
               >
-                <option value="">Sem professor atribuído</option>
+                <option value="">Informar nome sem vincular acesso</option>
                 {professores.map((professor) => (
                   <option key={professor.id} value={professor.id}>{professor.nome}</option>
                 ))}
@@ -208,6 +213,14 @@ export function NovaTurmaModal({ aberto, onClose, onSalvar }: Props) {
               />
             </div>
           </div>
+          {!professorId && (
+            <div>
+              <Label htmlFor="turma-professora-nome">Nome da responsável (opcional)</Label>
+              <Input id="turma-professora-nome" className="mt-1.5" value={professorNome} onChange={(event) => setProfessorNome(event.target.value)} minLength={2} maxLength={200} placeholder="Nome da professora" />
+              <p className="mt-1.5 text-xs text-muted-foreground">O nome organiza a sala sem criar acesso ao sistema. Se deixar em branco, a turma ficará como “Sem professora atribuída” e poderá ser completada em Gerenciar turmas.</p>
+              {professores.length === 0 && !erroProfessores && <p className="mt-1.5 text-xs text-muted-foreground">Para vincular uma conta, a direção pode cadastrar o perfil Professor em <Link href="/configuracoes" className="text-primary underline">Configurações &gt; Usuários</Link>.</p>}
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end gap-2 border-t bg-muted/30 p-4">

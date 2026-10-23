@@ -7,24 +7,7 @@ export type EscopoProfessor =
   | { restrito: false; turmaIds: null }
   | { restrito: true; turmaIds: string[] };
 
-/**
- * Normaliza apenas diferenças de representação do mesmo nome. Pontuação,
- * títulos e palavras continuam relevantes para evitar vínculos aproximados.
- */
-export function normalizarNomeProfessor(valor: string): string {
-  return valor
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .replace(/\s+/g, " ")
-    .toLocaleLowerCase("pt-BR");
-}
-
-/**
- * Mitigação transitória enquanto turma e usuário não possuem um vínculo por FK.
- * Resolve o escopo uma única vez por requisição. Perfis que não são professor
- * permanecem irrestritos; qualquer ambiguidade nominal fecha o escopo.
- */
+/** Autorização depende exclusivamente do vínculo IAM explícito da turma. */
 export async function resolverEscopoProfessor(
   usuario: Usuario
 ): Promise<EscopoProfessor> {
@@ -32,55 +15,12 @@ export async function resolverEscopoProfessor(
     return { restrito: false, turmaIds: null };
   }
 
-  const nomeUsuario = normalizarNomeProfessor(usuario.nome);
-  if (!nomeUsuario) return { restrito: true, turmaIds: [] };
-
-  const db = getDatabase();
-  const { data: professores, error: erroProfessores } = await db
-    .from("usuarios")
-    .select("id,nome")
-    .eq("perfil", "professor")
-    .eq("ativo", true);
-  if (erroProfessores) {
-    throw new Error("Falha ao confirmar a identidade nominal do professor");
-  }
-
-  const professoresComMesmoNome = (professores ?? []).filter(
-    (professor) =>
-      typeof professor.nome === "string" &&
-      normalizarNomeProfessor(professor.nome) === nomeUsuario
-  );
-  if (
-    professoresComMesmoNome.length !== 1 ||
-    String(professoresComMesmoNome[0].id) !== usuario.id
-  ) {
-    return { restrito: true, turmaIds: [] };
-  }
-
-  const { data, error } = await db
+  const { data, error } = await getDatabase()
     .from("turmas")
-    .select("id,professor_usuario_id,professor_id,professor_nome");
+    .select("id")
+    .eq("professor_usuario_id", usuario.id);
   if (error) throw new Error("Falha ao resolver as turmas atribuídas ao professor");
-
-  const turmasPorUsuario = (data ?? [])
-    .filter(
-      (turma) =>
-        String(turma.professor_usuario_id ?? turma.professor_id ?? "") === usuario.id
-    )
-    .map((turma) => String(turma.id));
-  if (turmasPorUsuario.length > 0) {
-    return { restrito: true, turmaIds: turmasPorUsuario };
-  }
-
-  const turmaIds = (data ?? [])
-    .filter(
-      (turma) =>
-        typeof turma.professor_nome === "string" &&
-        normalizarNomeProfessor(turma.professor_nome) === nomeUsuario
-    )
-    .map((turma) => String(turma.id));
-
-  return { restrito: true, turmaIds };
+  return { restrito: true, turmaIds: (data ?? []).map((turma) => String(turma.id)) };
 }
 
 export function professorPodeAcessarTurma(
@@ -117,5 +57,34 @@ export async function professorPodeAcessarAluno(
     .in("turma_id", escopo.turmaIds)
     .maybeSingle();
   if (error) throw new Error("Falha ao validar o aluno atribuído ao professor");
+  return Boolean(data);
+}
+
+/** Bebês sem turma permanecem acessíveis apenas à gestão. */
+export async function listarBebesDoEscopoProfessor(
+  escopo: EscopoProfessor
+): Promise<string[]> {
+  if (!escopo.restrito || escopo.turmaIds.length === 0) return [];
+  const { data, error } = await getDatabase()
+    .from("bercario_bebes")
+    .select("id")
+    .in("turma_id", escopo.turmaIds);
+  if (error) throw new Error("Falha ao resolver os bebês atribuídos ao professor");
+  return (data ?? []).map((bebe) => String(bebe.id));
+}
+
+export async function professorPodeAcessarBebe(
+  escopo: EscopoProfessor,
+  bebeId: string
+): Promise<boolean> {
+  if (!escopo.restrito) return true;
+  if (!bebeId || escopo.turmaIds.length === 0) return false;
+  const { data, error } = await getDatabase()
+    .from("bercario_bebes")
+    .select("id")
+    .eq("id", bebeId)
+    .in("turma_id", escopo.turmaIds)
+    .maybeSingle();
+  if (error) throw new Error("Falha ao validar o bebê atribuído ao professor");
   return Boolean(data);
 }

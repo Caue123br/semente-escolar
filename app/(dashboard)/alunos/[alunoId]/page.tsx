@@ -19,16 +19,21 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useEntidade } from "@/lib/data/store";
+import { usePerfil } from "@/lib/perfil-context";
+import { podeGerenciarAlunos } from "@/lib/access-control";
 import { UploadFotoAluno } from "@/components/alunos/upload-foto";
 import { FichaFinanceiraAluno } from "@/components/financeiro/ficha-financeira-aluno";
 import { EditarAlunoModal } from "@/components/alunos/editar-aluno-modal";
 import { formatDateBR, formatBRL } from "@/lib/utils";
+import { formatarPeriodoMatricula } from "@/lib/periodos-matricula";
+import { formatarTelefone } from "@/lib/cpf";
 import type { FichaSaude } from "@/lib/types";
 
 export default function AlunoDetalhePage() {
   const params = useParams<{ alunoId: string }>();
+  const { perfil } = usePerfil();
   const { items: alunos, carregando, erro: erroAlunos, update } = useEntidade("alunos");
-  const { items: turmas } = useEntidade("turmas");
+  const { items: turmas, carregando: carregandoTurmas, erro: erroTurmas } = useEntidade("turmas");
   const { items: mensalidades } = useEntidade("mensalidades");
   const [editando, setEditando] = React.useState(false);
 
@@ -73,6 +78,8 @@ export default function AlunoDetalhePage() {
   const whatsappPrincipal = linkWhatsApp(responsavelPrincipal?.telefone);
   const saude = aluno.fichaSaude;
   const doencas = saude ? listarDoencas(saude.doencas) : [];
+  const professoraResponsavel = turma?.professorNome?.trim();
+  const autorizadas = aluno.pessoasAutorizadas ?? [];
 
   return (
     <div className="space-y-6">
@@ -97,8 +104,6 @@ export default function AlunoDetalhePage() {
             <div className="flex-1">
               <h1 className="text-2xl font-bold tracking-tight">{aluno.nome}</h1>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                <span>{turma?.nome ?? "Sem turma"}</span>
-                <span>•</span>
                 <span>{idade} anos</span>
                 <span>•</span>
                 <span>Matrícula {aluno.matricula}</span>
@@ -142,6 +147,61 @@ export default function AlunoDetalhePage() {
               )}
             </div>
           </div>
+          <dl aria-label="Sala e professora do aluno" className="mt-5 grid gap-4 border-t pt-4 sm:grid-cols-2">
+            <div>
+              <dt className="text-xs font-medium text-muted-foreground">Sala / turma</dt>
+              <dd className="mt-1 font-semibold">{turma?.nome ?? (carregandoTurmas ? "Carregando sala..." : "Sala / turma não encontrada")}</dd>
+              {turma && <dd className="mt-1 text-xs text-muted-foreground">{turma.serie} · {turma.turno}</dd>}
+              {podeGerenciarAlunos(perfil) && (
+                <dd className="mt-2">
+                  <Button size="sm" variant="outline" onClick={() => setEditando(true)}>Alterar sala</Button>
+                </dd>
+              )}
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-muted-foreground">Professora responsável</dt>
+              <dd className={`mt-1 font-semibold ${!professoraResponsavel && !carregandoTurmas ? "text-amber-700" : ""}`}>
+                {professoraResponsavel || (carregandoTurmas ? "Carregando professora..." : erroTurmas ? "Não foi possível carregar a professora" : "Professora não vinculada")}
+              </dd>
+              {!professoraResponsavel && !carregandoTurmas && !erroTurmas && (
+                <dd className="mt-1 text-xs text-muted-foreground">A professora deve ser informada no cadastro da sala / turma.</dd>
+              )}
+            </div>
+          </dl>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2">
+            Autorizados a buscar <Badge variant="secondary">{autorizadas.length}</Badge>
+          </CardTitle>
+          <CardDescription>Pessoas informadas pela família para retirar a criança.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {autorizadas.length ? (
+            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {autorizadas.map((pessoa, i) => {
+                const telefone = pessoa.telefone?.replace(/\D/g, "") ?? "";
+                const podeLigar = telefone.length === 10 || telefone.length === 11;
+                return (
+                  <li key={i} className="rounded-lg border p-3 text-sm">
+                    <div className="font-semibold">{pessoa.nome}</div>
+                    <div className="text-muted-foreground">{pessoa.parentesco}</div>
+                    {podeLigar ? (
+                      <a href={`tel:${telefone}`} className="mt-1 inline-flex items-center gap-2 text-primary hover:underline">
+                        <Phone className="h-4 w-4" /> {formatarTelefone(telefone)}
+                      </a>
+                    ) : (
+                      <div className="mt-1 text-muted-foreground">{pessoa.telefone?.trim() || "Telefone não informado"}</div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">Nenhuma pessoa autorizada a buscar cadastrada.</p>
+          )}
         </CardContent>
       </Card>
 
@@ -154,7 +214,7 @@ export default function AlunoDetalhePage() {
           <TabsTrigger value="saude">Saúde</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="responsaveis">
+        <TabsContent value="responsaveis" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             {aluno.responsaveis.map((r, i) => (
               <Card key={i}>
@@ -224,7 +284,8 @@ export default function AlunoDetalhePage() {
                 <Field label="CPF" value={aluno.cpf || "—"} />
                 <Field label="RG" value={aluno.rg ?? "—"} />
                 <Field label="Turma" value={turma?.nome ?? "—"} />
-                <Field label="Turno" value={turma?.turno ?? "—"} />
+                <Field label="Turno da turma" value={turma?.turno ?? "—"} />
+                <Field label="Período e horário do aluno" value={formatarPeriodoMatricula(aluno.periodo) || "Não informado"} />
                 <Field label="Bilíngue" value={aluno.bilingue ? "Sim" : "Não"} />
                 <Field label="Data da matrícula" value={formatDateBR(aluno.dataMatricula)} />
               </div>

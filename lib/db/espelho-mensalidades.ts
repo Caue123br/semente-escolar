@@ -1,8 +1,11 @@
 import "server-only";
 
 import { formatBRL } from "@/lib/utils";
+import { calcularEspelhos, idEspelho } from "@/lib/financeiro-espelho";
 import { registrarAudit } from "./audit";
 import type { DatabaseClient } from "./postgres";
+
+export { idEspelho } from "@/lib/financeiro-espelho";
 
 /**
  * Espelho das cobranças de mensalidade em app.mensalidades — é de lá que o
@@ -16,21 +19,7 @@ import type { DatabaseClient } from "./postgres";
 
 const COMPETENCIA = /^20\d{2}-(0[1-9]|1[0-2])$/;
 
-const cent = (v: unknown) => Math.round(Number(v ?? 0) * 100);
-const reais = (centavos: number) => centavos / 100;
-const competenciaDe = (vencimento: unknown) => String(vencimento ?? "").slice(0, 7);
-const diasEntre = (de: string, ate: string) =>
-  Math.max(0, Math.round((Date.parse(`${ate}T00:00:00Z`) - Date.parse(`${de}T00:00:00Z`)) / 86_400_000));
 const mesLegivel = (competencia: string) => `${competencia.slice(5, 7)}/${competencia.slice(0, 4)}`;
-
-/**
- * Id determinístico da linha do espelho. Só a linha com este id pertence às
- * cobranças do aluno; qualquer outra foi lançada na aba Mensalidades e não pode
- * ser reescrita nem apagada por aqui.
- */
-export function idEspelho(alunoId: string, competencia: string): string {
-  return `mens-${alunoId}-${competencia}`;
-}
 
 /** A linha de app.mensalidades é o espelho das cobranças (e não um lançamento manual). */
 export function ehLinhaDoEspelho(linha: Record<string, unknown>): boolean {
@@ -125,7 +114,7 @@ export async function sincronizarEspelho(
 ): Promise<LinhaEspelhoRemovida[]> {
   const { data: cobrancas, error } = await tx
     .from("cobrancas")
-    .select("valor, valor_pago, vencimento, status, data_pagamento, forma_pagamento")
+    .select("aluno_id, valor, valor_pago, vencimento, status, data_pagamento, forma_pagamento")
     .eq("aluno_id", alunoId)
     .eq("tipo", "mensalidade");
   if (error) throw falhaDoEspelho(error);
@@ -145,44 +134,9 @@ export async function sincronizarEspelho(
     turmaNome = turma?.nome ? String(turma.nome) : null;
   }
 
-  type Agregado = {
-    valorCent: number;
-    pagoCent: number;
-    vencimento: string;
-    vencimentoAberto: string | null;
-    dataPagamento: string | null;
-    formaPagamento: string | null;
-    tudoPago: boolean;
-  };
-  const porCompetencia = new Map<string, Agregado>();
-  for (const c of cobrancas ?? []) {
-    const vencimento = String(c.vencimento ?? "").slice(0, 10);
-    const competencia = competenciaDe(vencimento);
-    if (!COMPETENCIA.test(competencia)) continue;
-    const a: Agregado = porCompetencia.get(competencia) ?? {
-      valorCent: 0,
-      pagoCent: 0,
-      vencimento,
-      vencimentoAberto: null,
-      dataPagamento: null,
-      formaPagamento: null,
-      tudoPago: true,
-    };
-    a.valorCent += cent(c.valor);
-    if (vencimento < a.vencimento) a.vencimento = vencimento;
-    if (c.status === "Pago") {
-      a.pagoCent += cent(c.valor_pago);
-      const dataPagamento = c.data_pagamento ? String(c.data_pagamento).slice(0, 10) : null;
-      if (dataPagamento && (!a.dataPagamento || dataPagamento > a.dataPagamento)) {
-        a.dataPagamento = dataPagamento;
-        a.formaPagamento = c.forma_pagamento ? String(c.forma_pagamento) : null;
-      }
-    } else {
-      a.tudoPago = false;
-      if (!a.vencimentoAberto || vencimento < a.vencimentoAberto) a.vencimentoAberto = vencimento;
-    }
-    porCompetencia.set(competencia, a);
-  }
+  const porCompetencia = new Map(
+    [...calcularEspelhos(cobrancas ?? [], hoje).values()].map((linha) => [linha.competencia, linha])
+  );
 
   const vazias = competenciasAfetadas.filter(
     (competencia) => COMPETENCIA.test(competencia) && !porCompetencia.has(competencia)
@@ -216,35 +170,12 @@ export async function sincronizarEspelho(
 
   const linhas = [...porCompetencia]
     .filter(([competencia]) => !foraDoEspelho.has(competencia))
-    .map(([competencia, a]) => {
-      // Competência só fica "Paga" com dinheiro registrado: baixa legada de
-      // valor zero viraria 'Paga' sem valor pago, o banco recusaria a linha e a
-      // ficha do aluno ficaria impossível de operar.
-      const recebido = a.pagoCent > 0;
-      const quitada = a.tudoPago && recebido;
-      const referencia = a.vencimentoAberto ?? a.vencimento;
-      const status = quitada
-        ? "Paga"
-        : referencia < hoje
-          ? "Atrasada"
-          : referencia === hoje
-            ? "Vence Hoje"
-            : "A Vencer";
-      return {
-        id: idEspelho(alunoId, competencia),
-        aluno_id: alunoId,
-        aluno_nome: aluno?.nome ? String(aluno.nome) : null,
-        turma_nome: turmaNome,
-        competencia,
-        vencimento: a.vencimento,
-        valor: reais(a.valorCent),
-        valor_pago: recebido ? reais(a.pagoCent) : null,
-        data_pagamento: recebido ? a.dataPagamento : null,
-        status,
-        dias_atraso: status === "Atrasada" ? diasEntre(referencia, hoje) : 0,
-        forma_pagamento: recebido ? a.formaPagamento : null,
-      };
-    });
+    .map(([competencia, a]) => ({
+      ...a,
+      id: idEspelho(alunoId, competencia),
+      aluno_nome: aluno?.nome ? String(aluno.nome) : null,
+      turma_nome: turmaNome,
+    }));
 
   if (linhas.length > 0) {
     const { error: erroEspelho } = await tx

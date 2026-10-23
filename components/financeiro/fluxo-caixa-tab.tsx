@@ -22,12 +22,13 @@ import {
 import { formatBRL } from "@/lib/utils";
 import { useEntidade } from "@/lib/data/store";
 import { usePeriodoContexto } from "@/lib/contexto-periodo";
-import { somaRecebida } from "@/lib/financeiro-mensalidades";
+import { recebimentosFinanceiros } from "@/lib/financeiro-mensalidades";
 import { MESES_PT_ABREV } from "@/components/shared/seletor-mes";
 
 export function FluxoCaixaTab() {
   const { periodo } = usePeriodoContexto();
   const { items: mensalidades } = useEntidade("mensalidades");
+  const { items: cobrancas } = useEntidade("cobrancas");
   const { items: vendas } = useEntidade("vendas");
   const { items: despesas } = useEntidade("despesas");
   const { items: funcionarios } = useEntidade("funcionarios");
@@ -38,6 +39,7 @@ export function FluxoCaixaTab() {
 
   // Calcula 12 meses (incluindo o atual)
   const dados = React.useMemo(() => {
+    const recebimentos = recebimentosFinanceiros(mensalidades, cobrancas);
     const lista: Array<{ mes: string; competencia: string; entrada: number; saida: number; saldo: number }> = [];
     for (let i = 11; i >= 0; i--) {
       const d = new Date(periodo.ano, periodo.mes - i, 1);
@@ -49,9 +51,8 @@ export function FluxoCaixaTab() {
       const ultimoDia = new Date(ano, m + 1, 0).getDate();
       const fimMes = `${ano}-${mm}-${String(ultimoDia).padStart(2, "0")}`;
 
-      // Entradas: o que entrou de mensalidade na competência (mesmo critério dos
-      // KPIs e do DRE, em lib/financeiro-mensalidades) + vendas
-      const entradaMens = somaRecebida(mensalidades.filter((mn) => mn.competencia === comp));
+      // Caixa reconhece o recebimento na data real, incluindo a matrícula.
+      const entradaMens = recebimentos.filter((r) => r.data.slice(0, 7) === comp).reduce((s, r) => s + r.valor, 0);
       const entradaVendas = vendas
         .filter((v) => v.data >= inicioMes && v.data <= fimMes)
         .reduce((a, v) => a + v.total, 0);
@@ -72,7 +73,7 @@ export function FluxoCaixaTab() {
       });
     }
     return lista;
-  }, [periodo, mensalidades, vendas, despesas, folhaComEncargos]);
+  }, [periodo, mensalidades, cobrancas, vendas, despesas, folhaComEncargos]);
 
   const saldoMesAtual = dados[dados.length - 1]?.saldo ?? 0;
   const saldoAcumulado = dados.reduce((a, b) => a + b.saldo, 0);
@@ -108,7 +109,7 @@ export function FluxoCaixaTab() {
         <CardHeader>
           <CardTitle>Fluxo de caixa — 12 meses até {periodo.label}</CardTitle>
           <CardDescription>
-            Entradas (mensalidades + vendas), saídas (despesas + folha com encargos), saldo mensal.
+            Entradas por data de recebimento (mensalidades + matrículas + vendas), saídas (despesas + folha com encargos), saldo mensal.
           </CardDescription>
         </CardHeader>
         <CardContent>

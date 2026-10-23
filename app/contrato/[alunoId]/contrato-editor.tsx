@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CONTRATOS, type PeriodoContrato } from "@/lib/contrato-modelo";
+import { obterPeriodoMatricula } from "@/lib/periodos-matricula";
 import { formatBRL, formatDateBR } from "@/lib/utils";
 import type { Aluno } from "@/lib/types";
 
@@ -98,7 +99,10 @@ function mesNomeDeISO(iso: string, somarMeses = 0): string {
 }
 
 export function ContratoEditor({ aluno, turma, plano, cobrado }: Props) {
-  const [periodo, setPeriodo] = React.useState<PeriodoContrato>("parcial");
+  const periodoMatriculado = obterPeriodoMatricula(aluno.periodo);
+  const [categoriaContrato, setCategoriaContrato] = React.useState<PeriodoContrato>(
+    () => periodoMatriculado?.contrato ?? "parcial"
+  );
   const anual = plano.mensalidadePeriodicidade === "anual";
 
   const [campos, setCampos] = React.useState<Record<string, string>>(() => {
@@ -136,7 +140,7 @@ export function ContratoEditor({ aluno, turma, plano, cobrado }: Props) {
       CIDADE: "Taubaté",
       CEP: aluno.cep ?? "",
       NIVEL: turma.serie || turma.nome || "",
-      HORARIO: "",
+      HORARIO: periodoMatriculado?.horario ?? "",
       // A anuidade é o total das mensalidades do plano, não um valor solto.
       ANUIDADE: mens != null ? brl(mens * parcelasAnuidade) : "",
       N_PARC: mens != null ? String(parcelasAnuidade) : "",
@@ -163,7 +167,11 @@ export function ContratoEditor({ aluno, turma, plano, cobrado }: Props) {
     (p: string): string =>
       p
         .replace(/\{\{(\w+)\}\}/g, (_m, tk: string) => {
-          if (tk === "PERIODO") return PERIODO_LABEL[periodo];
+          if (tk === "PERIODO") {
+            return periodoMatriculado?.contrato === categoriaContrato
+              ? periodoMatriculado.nome
+              : PERIODO_LABEL[categoriaContrato];
+          }
           const v = campos[tk];
           return v && v.trim() ? v : "____________";
         })
@@ -172,7 +180,7 @@ export function ContratoEditor({ aluno, turma, plano, cobrado }: Props) {
         // legal é verbatim e não se edita: o espaço é reposto ao preencher.
         .replace(/\bas([\d_])/g, "as $1")
         .replace(/(\S)e meses subsequentes/g, "$1 e meses subsequentes"),
-    [campos, periodo]
+    [campos, categoriaContrato, periodoMatriculado]
   );
 
   const anuidadeContrato = numeroBR(campos.ANUIDADE);
@@ -262,7 +270,7 @@ export function ContratoEditor({ aluno, turma, plano, cobrado }: Props) {
     );
   }, [campos, anuidadeContrato, taxaContrato, plano.matriculaTaxa, cobrado]);
 
-  const corpo = CONTRATOS[periodo].corpo;
+  const corpo = CONTRATOS[categoriaContrato].corpo;
 
   type Bloco = { texto: string; tipo: "titulo" | "clausula" | "corpo" };
   const blocos = React.useMemo<Bloco[]>(() => {
@@ -366,8 +374,15 @@ export function ContratoEditor({ aluno, turma, plano, cobrado }: Props) {
               <select
                 id="periodo"
                 className={`${selectCls} w-48`}
-                value={periodo}
-                onChange={(e) => setPeriodo(e.target.value as PeriodoContrato)}
+                value={categoriaContrato}
+                onChange={(e) => {
+                  const categoria = e.target.value as PeriodoContrato;
+                  setCategoriaContrato(categoria);
+                  setCampos((atuais) => ({
+                    ...atuais,
+                    HORARIO: periodoMatriculado?.contrato === categoria ? periodoMatriculado.horario : "",
+                  }));
+                }}
               >
                 <option value="parcial">Parcial</option>
                 <option value="semi">Semi-integral</option>

@@ -193,7 +193,7 @@ export async function POST(req: Request) {
       // o plano do primeiro ou esbarra na chave primária.
       const { data: existentesRaw, error: errExist } = await tx
         .from("cobrancas")
-        .select("id, tipo, descricao, valor, vencimento, status")
+        .select("id, tipo, descricao, valor, valor_pago, vencimento, status")
         .eq("aluno_id", alunoId);
       if (errExist) throw new Error(errExist.message);
       const existentes = existentesRaw ?? [];
@@ -207,6 +207,15 @@ export async function POST(req: Request) {
         (c) =>
           (c.status === "Pendente" || c.status === "Atrasada") &&
           String(c.vencimento) >= corte &&
+          dentroDaJanela(competenciaDe(c.vencimento)) &&
+          // Só IDs reconhecidos do gerador pertencem a este plano. Lançamentos
+          // manuais e contratos fora da janela jamais são substituídos aqui.
+          (c.tipo === "mensalidade"
+            ? String(c.id) === idMensalidade(alunoId, competenciaDe(c.vencimento))
+            : c.tipo === "matricula" &&
+              String(c.id).startsWith(`cob-${alunoId}-mat-`) &&
+              String(c.id) === idParcelaMatricula(alunoId, Number(String(c.id).slice(`cob-${alunoId}-mat-`.length)))) &&
+          cent(c.valor_pago) === 0 &&
           // Saldo de mês que já teve recebimento continua em aberto.
           !(c.tipo === "mensalidade" && competenciasComPagamento.has(competenciaDe(c.vencimento)))
       );
@@ -308,6 +317,7 @@ export async function POST(req: Request) {
           .filter(
             (c) =>
               c.tipo === "mensalidade" &&
+              String(c.id) === idMensalidade(alunoId, competenciaDe(c.vencimento)) &&
               periodicidadeDaCobranca(c.descricao) === periodicidade
           )
           .map((c) => indiceMes(competenciaDe(c.vencimento)))
@@ -343,12 +353,27 @@ export async function POST(req: Request) {
         }
       }
 
-      if (idsApagar.size > 0) {
-        const { error: errDel } = await tx
+      for (const original of apagar) {
+        const { data: apagada, error: errDel } = await tx
           .from("cobrancas")
           .delete()
-          .in("id", [...idsApagar]);
+          .eq("aluno_id", alunoId)
+          .eq("id", String(original.id))
+          .eq("tipo", original.tipo)
+          .eq("valor", original.valor)
+          .eq("vencimento", original.vencimento)
+          .eq("status", original.status)
+          .is("descricao", original.descricao ?? null)
+          .is("valor_pago", original.valor_pago ?? null)
+          .select("id")
+          .maybeSingle();
         if (errDel) throw new Error(errDel.message);
+        // O DELETE compara o estado exato lido e detém a trava da linha. Uma
+        // remarcação dentro da janela também muda a posse do ID; qualquer
+        // diferença desfaz a geração inteira, inclusive exclusões anteriores.
+        if (!apagada) {
+          throw new ErroPlano(409, "Uma cobrança foi recebida ou alterada em outra tela. Nada foi regerado; recarregue a ficha financeira.");
+        }
       }
 
       if (novas.length > 0) {
@@ -460,11 +485,3 @@ export async function POST(req: Request) {
     avisos,
   });
 }
-
-// TODO(financeiro): a taxa de matrícula recebida não entra no DRE/KPI/fluxo de
-// caixa. O espelho em app.mensalidades só aceita uma linha por competência (é a
-// mensalidade do mês), e nenhuma tela do Financeiro consolidado lê app.cobrancas.
-// A decisão de onde essa receita entra (linha de receita avulsa em app.vendas ou
-// o Financeiro passar a ler app.cobrancas) é do dono do produto: cria destino de
-// receita novo ou muda a fonte do Financeiro, e nenhuma das duas cabe aqui. O
-// mesmo TODO está em components/financeiro/dre-tab.tsx.

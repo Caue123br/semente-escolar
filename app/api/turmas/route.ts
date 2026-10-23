@@ -8,6 +8,7 @@ import { erroAPI, erros, sucesso } from "@/lib/db/api-response";
 import { getUsuarioLogado } from "@/lib/db/auth";
 import { resolverEscopoProfessor } from "@/lib/db/professor-scope";
 import type { Turma } from "@/lib/types";
+import { podeGerenciarAlunos } from "@/lib/access-control";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,6 +31,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const usuario = await getUsuarioLogado();
+  if (!usuario) return erros.naoAutenticado();
+  if (!podeGerenciarAlunos(usuario.perfil)) return erros.semPermissao("gerenciar turmas");
   let t: Turma;
   try {
     t = (await req.json()) as Turma;
@@ -54,6 +58,7 @@ export async function POST(req: Request) {
   if (t.cor && !/^#[0-9a-f]{6}$/i.test(t.cor)) return erros.dadosInvalidos("cor");
 
   const sb = getDatabase();
+  if (t.professorId !== undefined && typeof t.professorId !== "string") return erros.dadosInvalidos("professora");
   const professorId = typeof t.professorId === "string" ? t.professorId.trim() : "";
   let professorNome: string | null = null;
   if (professorId) {
@@ -67,6 +72,13 @@ export async function POST(req: Request) {
       return erroAPI("O professor selecionado não está disponível.", 422);
     }
     professorNome = String(professor.nome);
+  } else if (t.professorNome !== undefined) {
+    if (typeof t.professorNome !== "string") return erros.dadosInvalidos("professora responsável");
+    const nomeResponsavel = t.professorNome.trim();
+    if (nomeResponsavel && (nomeResponsavel.length < 2 || nomeResponsavel.length > 200)) {
+      return erros.dadosInvalidos("nome da professora responsável");
+    }
+    professorNome = nomeResponsavel || null;
   }
   const id = randomUUID();
   const { data, error } = await sb.from("turmas").insert({

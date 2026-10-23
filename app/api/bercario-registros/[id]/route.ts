@@ -7,6 +7,9 @@ import {
   objetoSimples,
   texto,
 } from "@/lib/api-input";
+import { podeAcessarModulo } from "@/lib/access-control";
+import { getUsuarioLogado } from "@/lib/db/auth";
+import { professorPodeAcessarBebe, resolverEscopoProfessor } from "@/lib/db/professor-scope";
 import { registrarAudit } from "@/lib/db/audit";
 import { erros, sucesso } from "@/lib/db/api-response";
 import { rowToRegistroBercario } from "@/lib/db/mappers";
@@ -21,7 +24,20 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const usuario = await getUsuarioLogado();
+  if (!usuario) return erros.naoAutenticado();
+  if (!podeAcessarModulo(usuario.perfil, "bercario")) return erros.semPermissao("acessar o berçário");
   const { id } = await params;
+  const { data: registro, error: erroRegistro } = await getDatabase().from("bercario_registros")
+    .select("id,bebe_id").eq("id", id).maybeSingle();
+  if (erroRegistro) return erros.servidorIndisponivel(erroRegistro);
+  if (!registro) return erros.naoEncontrado("Registro");
+  try {
+    const escopo = await resolverEscopoProfessor(usuario);
+    if (!(await professorPodeAcessarBebe(escopo, String(registro.bebe_id)))) return erros.semPermissao("alterar rotina deste bebê");
+  } catch (error) {
+    return erros.servidorIndisponivel(error);
+  }
   const { data, error } = await getDatabase()
     .from("bercario_registros")
     .delete()
@@ -38,7 +54,20 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const usuario = await getUsuarioLogado();
+  if (!usuario) return erros.naoAutenticado();
+  if (!podeAcessarModulo(usuario.perfil, "bercario")) return erros.semPermissao("acessar o berçário");
   const { id } = await params;
+  const { data: registro, error: erroRegistro } = await getDatabase().from("bercario_registros")
+    .select("id,bebe_id").eq("id", id).maybeSingle();
+  if (erroRegistro) return erros.servidorIndisponivel(erroRegistro);
+  if (!registro) return erros.naoEncontrado("Registro");
+  try {
+    const escopo = await resolverEscopoProfessor(usuario);
+    if (!(await professorPodeAcessarBebe(escopo, String(registro.bebe_id)))) return erros.semPermissao("alterar rotina deste bebê");
+  } catch (error) {
+    return erros.servidorIndisponivel(error);
+  }
   let body: unknown;
   try {
     body = await req.json();
@@ -59,6 +88,12 @@ export async function PATCH(
       .maybeSingle();
     if (error) return erros.servidorIndisponivel(error);
     if (!bebe) return erros.naoEncontrado("Bebê");
+    try {
+      const escopo = await resolverEscopoProfessor(usuario);
+      if (!(await professorPodeAcessarBebe(escopo, bebeId))) return erros.semPermissao("registrar rotina deste bebê");
+    } catch (error) {
+      return erros.servidorIndisponivel(error);
+    }
     update.bebe_id = bebeId;
   }
   if (Object.hasOwn(body, "data")) {

@@ -25,6 +25,8 @@ import { podeAcessarModulo } from "@/lib/access-control";
 import { PeriodoProvider } from "@/lib/contexto-periodo";
 import { useEntidade } from "@/lib/data/store";
 import { ultimasAvaliacoesPorAluno } from "@/lib/pedagogico";
+import { resumoFinanceiro } from "@/lib/financeiro-mensalidades";
+import { formatDateLocalISO } from "@/lib/utils";
 import { usePerfil } from "@/lib/perfil-context";
 import type { IndicadorCockpit } from "@/lib/mock-data/indicadores-cockpit";
 
@@ -62,6 +64,12 @@ export default function CockpitPage() {
     reset: recarregarMensalidades,
   } = useEntidade("mensalidades", { habilitado: podeFinanceiro });
   const {
+    items: cobrancas,
+    carregando: carregandoCobrancas,
+    erro: erroCobrancas,
+    reset: recarregarCobrancas,
+  } = useEntidade("cobrancas", { habilitado: podeFinanceiro });
+  const {
     items: despesas,
     carregando: carregandoDespesas,
     erro: erroDespesas,
@@ -98,23 +106,12 @@ export default function CockpitPage() {
   const despesasMes = despesas.filter(
     (despesa) => despesa.data >= periodo.inicio && despesa.data <= periodo.fim
   );
-  const totalRecebido = mensalidadesMes
-    .filter((mensalidade) => mensalidade.status === "Paga")
-    .reduce((total, mensalidade) => total + (mensalidade.valorPago ?? mensalidade.valor), 0);
-  const totalAReceber = mensalidadesMes
-    .filter(
-      (mensalidade) =>
-        mensalidade.status === "A Vencer" || mensalidade.status === "Vence Hoje"
-    )
-    .reduce((total, mensalidade) => total + mensalidade.valor, 0);
-  const mensalidadesAtrasadas = mensalidadesMes.filter(
-    (mensalidade) => mensalidade.status === "Atrasada"
-  );
-  const totalInadimplencia = mensalidadesAtrasadas.reduce(
-    (total, mensalidade) => total + mensalidade.valor,
-    0
-  );
-  const totalFaturado = totalRecebido + totalAReceber + totalInadimplencia;
+  const resumo = resumoFinanceiro(mensalidades, cobrancas, periodo.competencia, formatDateLocalISO());
+  const totalRecebido = resumo.recebido;
+  const totalAReceber = resumo.aReceber;
+  const totalInadimplencia = resumo.inadimplencia;
+  const totalFaturado = resumo.faturado;
+
   const totalDespesas = despesasMes.reduce((total, despesa) => total + despesa.valor, 0);
   const totalVendasMes = vendasMes.reduce((total, venda) => total + venda.total, 0);
   const novasMatriculas = alunos.filter(
@@ -131,7 +128,7 @@ export default function CockpitPage() {
       valor: fmtBRL(totalFaturado),
       valorNumerico: totalFaturado,
       status: totalRecebido / Math.max(totalFaturado, 1) > 0.85 ? "verde" : "amarelo",
-      descricao: `${mensalidadesMes.length} mensalidades no período`,
+      descricao: `${mensalidadesMes.length} mensalidades · ${resumo.quantidadeMatriculas} parcelas de matrícula`,
       link: "/financeiro",
       icone: "TrendingUp",
     },
@@ -153,7 +150,7 @@ export default function CockpitPage() {
       valor: fmtBRL(totalAReceber),
       valorNumerico: totalAReceber,
       status: "amarelo",
-      descricao: "Mensalidades no prazo",
+      descricao: "Mensalidades e matrículas no prazo",
       link: "/financeiro",
       icone: "Clock",
     },
@@ -162,7 +159,7 @@ export default function CockpitPage() {
       titulo: "Inadimplência",
       valor: fmtBRL(totalInadimplencia),
       valorNumerico: totalInadimplencia,
-      variacao: `${mensalidadesAtrasadas.length} fam.`,
+      variacao: `${resumo.familiasEmAtraso} fam.`,
       variacaoTipo: "negativa",
       status:
         totalInadimplencia > 30_000
@@ -244,11 +241,12 @@ export default function CockpitPage() {
   ];
 
   const carregandoFinanceiro =
-    (podeFinanceiro && carregandoMensalidades) ||
+    (podeFinanceiro && (carregandoMensalidades || carregandoCobrancas)) ||
     (podeVendas && carregandoVendas) ||
     (podeDespesas && carregandoDespesas);
   const errosFinanceiros = [
     podeFinanceiro ? erroMensalidades : null,
+    podeFinanceiro ? erroCobrancas : null,
     podeVendas ? erroVendas : null,
     podeDespesas ? erroDespesas : null,
   ].filter((erro): erro is string => Boolean(erro));
@@ -268,7 +266,7 @@ export default function CockpitPage() {
   const avaliacoesAtuais = ultimasAvaliacoesPorAluno(alunos, avaliacoes);
 
   const recarregarFinanceiro = () => {
-    if (podeFinanceiro) recarregarMensalidades();
+    if (podeFinanceiro) { recarregarMensalidades(); recarregarCobrancas(); }
     if (podeVendas) recarregarVendas();
     if (podeDespesas) recarregarDespesas();
   };

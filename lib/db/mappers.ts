@@ -24,6 +24,7 @@ import type { BebeBercario, RegistroBercario } from "@/lib/mock-data/bercario";
 import type { DiaCardapio } from "@/lib/mock-data/cardapio";
 import type { RotaTransporte } from "@/lib/mock-data/transporte";
 import type { Lead, EstagioFunil } from "@/lib/mock-data/crm";
+import { obterPeriodoMatricula } from "@/lib/periodos-matricula";
 
 type Row = Record<string, unknown>;
 
@@ -39,6 +40,7 @@ export function rowToAluno(r: Row): Aluno {
     cpf: str(r.cpf),
     rg: r.rg ? str(r.rg) : undefined,
     turmaId: str(r.turma_id),
+    periodo: obterPeriodoMatricula(r.periodo)?.valor,
     bilingue: bool(r.bilingue),
     matricula: str(r.matricula),
     dataMatricula: str(r.data_matricula),
@@ -260,6 +262,7 @@ export function rowToBebe(r: Row): BebeBercario {
     idadeMeses: numb(r.idade_meses),
     responsavel: str(r.responsavel),
     professora: str(r.professora),
+    turmaId: r.turma_id ? str(r.turma_id) : null,
   };
 }
 

@@ -1,3 +1,5 @@
+import type { PeriodoMatricula } from "./periodos-matricula";
+
 // ============ Tipos centrais do sistema escolar ============
 
 export type Perfil = "diretor" | "coordenador" | "professor" | "financeiro";
@@ -55,6 +57,7 @@ export interface Responsavel {
 export interface PessoaAutorizada {
   nome: string;
   parentesco: string;
+  telefone?: string;
 }
 
 export interface FichaSaude {
@@ -97,6 +100,7 @@ export interface Aluno {
   cpf: string;
   rg?: string;
   turmaId: string;
+  periodo?: PeriodoMatricula;
   bilingue: boolean;
   matricula: string;
   dataMatricula: string;
@@ -108,7 +112,7 @@ export interface Aluno {
   // Campos da ficha completa (Escola Modelo)
   ra?: string;
   raca?: string;
-  sexo?: "M" | "F";
+  sexo?: "M" | "F" | ""; // Vazio explícito no PATCH remove o valor existente.
   naturalDe?: string;
   estado?: string;
   cep?: string;

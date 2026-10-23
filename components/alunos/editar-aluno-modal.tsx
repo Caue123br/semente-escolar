@@ -6,12 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/lib/toast";
+import { usePerfil } from "@/lib/perfil-context";
+import { podeGerenciarAlunos } from "@/lib/access-control";
 import { InputCPF, InputTelefone, InputCEP } from "@/components/shared/campos-mascarados";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { limparCPF, validarCPF } from "@/lib/cpf";
+import { limparCPF, validarCPF, validarTelefone } from "@/lib/cpf";
+import { PERIODOS_MATRICULA, obterPeriodoMatricula, type PeriodoMatricula } from "@/lib/periodos-matricula";
 import { formatDateLocalISO } from "@/lib/utils";
 import { ErroApi, type OpcoesEscrita } from "@/lib/data/store";
-import type { Aluno, Responsavel, Turma } from "@/lib/types";
+import type { Aluno, FichaSaude, PessoaAutorizada, Responsavel, Turma } from "@/lib/types";
 
 interface Props {
   aberto: boolean;
@@ -37,9 +40,38 @@ function numeroDoPayload(valor: unknown): number {
 const selectCls =
   "h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
 const PARENTESCOS: Responsavel["parentesco"][] = ["Mãe", "Pai", "Avó", "Avô", "Tio", "Tia", "Outro"];
+const CAMPOS_RESPONSAVEL: Array<keyof Responsavel> = [
+  "nome", "parentesco", "cpf", "rg", "telefone", "email", "endereco", "profissao",
+  "localTrabalho", "dataNascimento", "principal", "responsavelFinanceiro",
+];
+
+// Mesma comparação da API: espaços e campos opcionais vazios não alteram a lista legada.
+function assinaturaResponsaveis(lista: Responsavel[]): string {
+  return JSON.stringify(lista.map((responsavel) => CAMPOS_RESPONSAVEL.map((campo) => {
+    const valor = responsavel[campo];
+    if (campo === "principal" || campo === "responsavelFinanceiro") return valor === true;
+    return typeof valor === "string" ? valor.trim() : "";
+  })));
+}
+
+const DOENCAS: Array<{ campo: Exclude<keyof FichaSaude["doencas"], "hepatiteTipo">; label: string }> = [
+  { campo: "bronquite", label: "Bronquite" },
+  { campo: "catapora", label: "Catapora" },
+  { campo: "caxumba", label: "Caxumba" },
+  { campo: "convulsao", label: "Convulsão" },
+  { campo: "coqueluche", label: "Coqueluche" },
+  { campo: "diabete", label: "Diabete" },
+  { campo: "hepatite", label: "Hepatite" },
+  { campo: "pneumonia", label: "Pneumonia" },
+  { campo: "problemasCoracao", label: "Problemas no coração" },
+  { campo: "rubeola", label: "Rubéola" },
+  { campo: "sarampo", label: "Sarampo" },
+];
 
 export function EditarAlunoModal({ aberto, aluno, turmas, onClose, onSalvar }: Props) {
   const toast = useToast();
+  const { perfil } = usePerfil();
+  const podeGerenciar = podeGerenciarAlunos(perfil);
   const [salvando, setSalvando] = React.useState(false);
 
   // Campos do aluno
@@ -58,10 +90,14 @@ export function EditarAlunoModal({ aberto, aluno, turmas, onClose, onSalvar }: P
   const [telefoneAluno, setTelefoneAluno] = React.useState("");
   const [religiao, setReligiao] = React.useState("");
   const [turmaId, setTurmaId] = React.useState("");
+  const [periodo, setPeriodo] = React.useState<PeriodoMatricula | "">("");
   const [status, setStatus] = React.useState<Aluno["status"]>("Ativo");
   const [bilingue, setBilingue] = React.useState(false);
   const [observacoes, setObservacoes] = React.useState("");
   const [responsaveis, setResponsaveis] = React.useState<Responsavel[]>([]);
+  const [autorizadas, setAutorizadas] = React.useState<PessoaAutorizada[]>([]);
+  const [saude, setSaude] = React.useState<FichaSaude>({ doencas: {} });
+  const [saudeAlterada, setSaudeAlterada] = React.useState(false);
   const [cepStatus, setCepStatus] = React.useState<{
     estado: "vazio" | "buscando" | "ok" | "aviso";
     detalhe?: string;
@@ -87,16 +123,22 @@ export function EditarAlunoModal({ aberto, aluno, turmas, onClose, onSalvar }: P
     setTelefoneAluno(aluno.telefoneAluno ?? "");
     setReligiao(aluno.religiao ?? "");
     setTurmaId(aluno.turmaId ?? "");
+    setPeriodo(obterPeriodoMatricula(aluno.periodo)?.valor ?? "");
     setStatus(aluno.status ?? "Ativo");
     setBilingue(Boolean(aluno.bilingue));
     setObservacoes(aluno.observacoes ?? "");
     setResponsaveis(aluno.responsaveis ? aluno.responsaveis.map((r) => ({ ...r })) : []);
+    setAutorizadas(aluno.pessoasAutorizadas ? aluno.pessoasAutorizadas.map((pessoa) => ({ ...pessoa })) : []);
+    setSaude({ ...aluno.fichaSaude, doencas: { ...aluno.fichaSaude?.doencas } });
+    setSaudeAlterada(false);
     setCepStatus({ estado: "vazio" });
     setConflitoLotacao(null);
     cepConsultado.current = "";
   }, [aberto, aluno]);
 
-  if (!aberto || !aluno) return null;
+  if (!aberto || !aluno || !podeGerenciar) return null;
+  const turmaSelecionada = turmas.find((turma) => turma.id === turmaId);
+  const responsaveisAlterados = assinaturaResponsaveis(responsaveis) !== assinaturaResponsaveis(aluno.responsaveis ?? []);
 
   // A consulta de CEP passa pelo servidor (/api/cep) e mostra o que aconteceu.
   const buscarEnderecoPorCep = async (cepDigitado: string) => {
@@ -142,6 +184,16 @@ export function EditarAlunoModal({ aberto, aluno, turmas, onClose, onSalvar }: P
       { nome: "", parentesco: "Outro", cpf: "", telefone: "", email: "", endereco: "", principal: false },
     ]);
   const removeResp = (i: number) => setResponsaveis((atual) => atual.filter((_, idx) => idx !== i));
+  const setAutorizada = (i: number, campo: keyof PessoaAutorizada, valor: string) =>
+    setAutorizadas((atual) => atual.map((pessoa, idx) => idx === i ? { ...pessoa, [campo]: valor } : pessoa));
+  const alterarSaude = <K extends keyof FichaSaude>(campo: K, valor: FichaSaude[K]) => {
+    setSaude((atual) => ({ ...atual, [campo]: valor }));
+    setSaudeAlterada(true);
+  };
+  const alterarDoenca = <K extends keyof FichaSaude["doencas"]>(campo: K, valor: FichaSaude["doencas"][K]) => {
+    setSaude((atual) => ({ ...atual, doencas: { ...atual.doencas, [campo]: valor } }));
+    setSaudeAlterada(true);
+  };
 
   /**
    * Quem é o financeiro pode mudar (separação, troca de responsável). A eleição
@@ -180,7 +232,7 @@ export function EditarAlunoModal({ aberto, aluno, turmas, onClose, onSalvar }: P
       toast.error("Data de nascimento no futuro", "Confira o dia, o mês e o ano de nascimento.");
       return;
     }
-    const respCpfInvalido = responsaveis.find(
+    const respCpfInvalido = responsaveisAlterados && responsaveis.find(
       (r) => r.nome.trim() && limparCPF(r.cpf ?? "") && !validarCPF(r.cpf ?? "")
     );
     if (respCpfInvalido) {
@@ -190,15 +242,35 @@ export function EditarAlunoModal({ aberto, aluno, turmas, onClose, onSalvar }: P
       );
       return;
     }
+    const autorizadasPreenchidas = autorizadas.filter(
+      (pessoa) => pessoa.nome.trim() || pessoa.parentesco.trim() || pessoa.telefone?.trim()
+    );
+    const autorizadaIncompleta = autorizadasPreenchidas.find(
+      (pessoa) => !pessoa.nome.trim() || !pessoa.parentesco.trim()
+    );
+    if (autorizadaIncompleta) {
+      toast.error("Autorização incompleta", "Informe nome e parentesco de cada pessoa autorizada ou remova a linha.");
+      return;
+    }
+    const telefoneAutorizadaInvalido = autorizadasPreenchidas.find(
+      (pessoa) => pessoa.telefone?.trim() && !validarTelefone(pessoa.telefone)
+    );
+    if (telefoneAutorizadaInvalido) {
+      toast.error(
+        "Telefone da pessoa autorizada incompleto",
+        `Informe DDD e número de ${telefoneAutorizadaInvalido.nome.trim()} ou deixe o telefone em branco.`
+      );
+      return;
+    }
     // Um único financeiro, sempre alguém com nome — cobrança e portal precisam de destino.
     const eleito = responsaveis[indiceFinanceiro];
     const preenchidos = responsaveis.filter((r) => r.nome.trim());
     const nomeCurto = preenchidos.find((r) => r.nome.trim().length < 2);
-    if (nomeCurto) {
+    if (responsaveisAlterados && nomeCurto) {
       toast.error("Nome do responsável incompleto", "Escreva o nome completo de cada responsável cadastrado.");
       return;
     }
-    if (preenchidos.length > 0 && !preenchidos.some((r) => r.telefone?.trim() || r.email?.trim())) {
+    if (responsaveisAlterados && preenchidos.length > 0 && !preenchidos.some((r) => r.telefone?.trim() || r.email?.trim())) {
       toast.error(
         "Falta o contato da família",
         "Informe telefone ou e-mail de pelo menos um responsável."
@@ -208,14 +280,12 @@ export function EditarAlunoModal({ aberto, aluno, turmas, onClose, onSalvar }: P
     const financeiro = eleito && eleito.nome.trim() ? eleito : preenchidos[0];
     setSalvando(true);
     try {
-      const limpo = (s: string) => {
-        const t = s.trim();
-        return t === "" ? undefined : t;
-      };
+      // Vazio explícito chega ao PATCH; undefined seria omitido pelo JSON e manteria o dado antigo.
+      const limpo = (s: string) => s.trim();
       const patch: Partial<Aluno> = {
         nome: nome.trim(),
         dataNascimento,
-        sexo: sexo || undefined,
+        sexo,
         cpf: cpfAluno,
         rg: limpo(rg),
         ra: limpo(ra),
@@ -228,13 +298,25 @@ export function EditarAlunoModal({ aberto, aluno, turmas, onClose, onSalvar }: P
         telefoneAluno: limpo(telefoneAluno),
         religiao: limpo(religiao),
         turmaId,
+        ...(periodo ? { periodo } : {}),
         status,
         bilingue,
         observacoes: limpo(observacoes),
-        responsaveis: preenchidos.map((r) => ({
-          ...r,
-          principal: r === financeiro,
-          responsavelFinanceiro: r === financeiro,
+        // A API grava a ficha inteira. Só enviamos quando editada, preservando campos legados.
+        ...(saudeAlterada ? { fichaSaude: saude } : {}),
+        // Dados legados intocados não devem bloquear saúde nem ganhar um financeiro por inferência.
+        ...(responsaveisAlterados ? {
+          responsaveis: preenchidos.map((r) => ({
+            ...r,
+            principal: r === financeiro,
+            responsavelFinanceiro: r === financeiro,
+          })),
+        } : {}),
+        pessoasAutorizadas: autorizadasPreenchidas.map((pessoa) => ({
+          ...pessoa,
+          nome: pessoa.nome.trim(),
+          parentesco: pessoa.parentesco.trim(),
+          telefone: pessoa.telefone?.trim() || undefined,
         })),
       };
       await onSalvar(
@@ -294,13 +376,36 @@ export function EditarAlunoModal({ aberto, aluno, turmas, onClose, onSalvar }: P
             <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Situação</div>
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-1.5">
-                <Label htmlFor="ed-turma">Turma (período)</Label>
-                <select id="ed-turma" className={selectCls} value={turmaId} onChange={(e) => setTurmaId(e.target.value)}>
+                <Label htmlFor="ed-turma">Sala / turma</Label>
+                <select id="ed-turma" aria-describedby="ed-turma-hint" className={selectCls} value={turmaId} onChange={(e) => setTurmaId(e.target.value)}>
                   <option value="">— selecione —</option>
                   {turmas.map((t) => (
-                    <option key={t.id} value={t.id}>{t.nome}</option>
+                    <option key={t.id} value={t.id}>{t.nome} — {t.professorNome?.trim() || "Professora não vinculada"}</option>
                   ))}
                 </select>
+                <p id="ed-turma-hint" className={`text-xs ${turmaSelecionada && !turmaSelecionada.professorNome?.trim() ? "text-amber-700" : "text-muted-foreground"}`}>
+                  {turmaSelecionada
+                    ? turmaSelecionada.professorNome?.trim()
+                      ? `Professora responsável: ${turmaSelecionada.professorNome.trim()}. `
+                      : "Professora não vinculada. A edição pode continuar. "
+                    : "Selecione a sala do aluno. "}
+                  Ao trocar a sala, a professora responsável será a da nova turma.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ed-periodo">Período e horário</Label>
+                <select
+                  id="ed-periodo"
+                  className={selectCls}
+                  value={periodo}
+                  onChange={(e) => setPeriodo(e.target.value as PeriodoMatricula | "")}
+                >
+                  <option value="" disabled={Boolean(obterPeriodoMatricula(aluno.periodo))}>Período não informado</option>
+                  {PERIODOS_MATRICULA.map((opcao) => (
+                    <option key={opcao.valor} value={opcao.valor}>{opcao.nome} — {opcao.horario}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">Selecione o horário contratado para este aluno.</p>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ed-status">Status</Label>
@@ -343,10 +448,11 @@ export function EditarAlunoModal({ aberto, aluno, turmas, onClose, onSalvar }: P
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>CPF</Label>
+                <Label>CPF (opcional)</Label>
                 <InputCPF value={cpf} onChange={setCpf} />
+                <p className="text-xs text-muted-foreground">A ficha pode ficar sem o CPF da criança.</p>
               </div>
-              <Campo label="RG" value={rg} onChange={setRg} />
+              <Campo label="RG (opcional)" value={rg} onChange={setRg} />
               <Campo label="RA (registro acadêmico)" value={ra} onChange={setRa} />
               <Campo label="Raça/Cor" value={raca} onChange={setRaca} />
               <Campo label="Natural de" value={naturalDe} onChange={setNaturalDe} />
@@ -446,6 +552,141 @@ export function EditarAlunoModal({ aberto, aluno, turmas, onClose, onSalvar }: P
             )}
           </section>
 
+          <section>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pessoas autorizadas a buscar</div>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={autorizadas.length >= 5}
+                onClick={() => setAutorizadas((atual) => [...atual, { nome: "", parentesco: "", telefone: "" }])}
+              >
+                <Plus className="h-4 w-4" /> Adicionar
+              </Button>
+            </div>
+            <p className="mb-3 text-xs text-muted-foreground">Cadastre até 5 pessoas. O telefone é opcional; quando informado, inclua o DDD.</p>
+            {autorizadas.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhuma pessoa autorizada cadastrada.</p>
+            ) : (
+              <div className="space-y-3">
+                {autorizadas.map((pessoa, i) => (
+                  <div key={i} className="rounded-lg border p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <span className="text-sm font-medium">{pessoa.nome || `Pessoa autorizada ${i + 1}`}</span>
+                      <button
+                        type="button"
+                        className="text-danger hover:opacity-80"
+                        onClick={() => setAutorizadas((atual) => atual.filter((_, idx) => idx !== i))}
+                        aria-label={`Remover pessoa autorizada ${i + 1}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <Campo label="Nome completo" value={pessoa.nome} onChange={(v) => setAutorizada(i, "nome", v)} />
+                      <Campo label="Parentesco" value={pessoa.parentesco} onChange={(v) => setAutorizada(i, "parentesco", v)} />
+                      <div className="space-y-1.5">
+                        <Label htmlFor={`ed-autorizada-telefone-${i}`}>Telefone (opcional)</Label>
+                        <InputTelefone id={`ed-autorizada-telefone-${i}`} value={pessoa.telefone ?? ""} onChange={(v) => setAutorizada(i, "telefone", v)} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section aria-labelledby="ed-saude-titulo" className="space-y-4">
+            <h3 id="ed-saude-titulo" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Ficha individual de saúde</h3>
+            <div className="rounded-lg bg-muted/40 p-4">
+              <div className="mb-3 text-sm font-medium">Doenças que a criança já teve ou tem:</div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {DOENCAS.map(({ campo, label }) => (
+                  <label key={campo} className="flex cursor-pointer items-center gap-2 text-sm">
+                    <input
+                      id={`ed-saude-doenca-${campo}`}
+                      type="checkbox"
+                      className="h-4 w-4 rounded"
+                      checked={Boolean(saude.doencas?.[campo])}
+                      onChange={(e) => alterarDoenca(campo, e.target.checked)}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+              {(saude.doencas?.hepatite || saude.doencas?.hepatiteTipo) && (
+                <div className="mt-3">
+                  <Campo label="Hepatite — qual tipo?" value={saude.doencas.hepatiteTipo ?? ""} onChange={(v) => alterarDoenca("hepatiteTipo", v)} />
+                </div>
+              )}
+              <div className="mt-3">
+                <Campo label="Outras doenças" value={saude.doencasOutras ?? ""} onChange={(v) => alterarSaude("doencasOutras", v)} />
+              </div>
+            </div>
+            <SaudeSimNaoMotivo
+              label="O aluno já desmaiou alguma vez?"
+              sim={saude.desmaioSim}
+              motivo={saude.desmaioMotivo ?? ""}
+              onChangeSim={(v) => alterarSaude("desmaioSim", v)}
+              onChangeMotivo={(v) => alterarSaude("desmaioMotivo", v)}
+            />
+            <SaudeSimNaoMotivo
+              label="O aluno já esteve internado?"
+              sim={saude.internadoSim}
+              motivo={saude.internadoMotivo ?? ""}
+              onChangeSim={(v) => alterarSaude("internadoSim", v)}
+              onChangeMotivo={(v) => alterarSaude("internadoMotivo", v)}
+            />
+            <div className="space-y-1.5">
+              <Label htmlFor="ed-saude-alergias">Apresenta algum tipo de alergia? (medicamentos, alimentação)</Label>
+              <textarea
+                id="ed-saude-alergias"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                rows={2}
+                value={saude.alergias ?? ""}
+                onChange={(e) => alterarSaude("alergias", e.target.value)}
+              />
+            </div>
+            <SaudeSimNaoMotivo
+              label="Está em tratamento médico?"
+              sim={saude.tratamentoMedicoSim}
+              motivo={saude.tratamentoMotivo ?? ""}
+              onChangeSim={(v) => alterarSaude("tratamentoMedicoSim", v)}
+              onChangeMotivo={(v) => alterarSaude("tratamentoMotivo", v)}
+            />
+            <Campo label="Possui algum trauma ou fobia?" value={saude.traumaFobia ?? ""} onChange={(v) => alterarSaude("traumaFobia", v)} />
+            <SaudeSimNaoMotivo
+              label="Em caso de febre, pode ser dado algum medicamento? Qual?"
+              sim={saude.medicamentoFebreSim}
+              motivo={saude.medicamentoFebreQual ?? ""}
+              labelMotivo="Qual medicamento?"
+              onChangeSim={(v) => alterarSaude("medicamentoFebreSim", v)}
+              onChangeMotivo={(v) => alterarSaude("medicamentoFebreQual", v)}
+            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Campo label="Médico responsável" value={saude.medicoNome ?? ""} onChange={(v) => alterarSaude("medicoNome", v)} />
+              <Campo label="Telefone do médico" value={saude.medicoTelefone ?? ""} onChange={(v) => alterarSaude("medicoTelefone", v)} />
+            </div>
+            <SaudeSimNaoMotivo
+              label="Possui convênio médico?"
+              sim={saude.convenioSim}
+              motivo={saude.convenioQual ?? ""}
+              labelMotivo="Qual convênio?"
+              onChangeSim={(v) => alterarSaude("convenioSim", v)}
+              onChangeMotivo={(v) => alterarSaude("convenioQual", v)}
+            />
+            <div className="space-y-1.5">
+              <Label htmlFor="ed-saude-informacoes">Informações complementares</Label>
+              <textarea
+                id="ed-saude-informacoes"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                rows={3}
+                value={saude.informacoesComplementares ?? ""}
+                onChange={(e) => alterarSaude("informacoesComplementares", e.target.value)}
+              />
+            </div>
+          </section>
+
           {/* Observações */}
           <section>
             <Label htmlFor="ed-obs">Observações</Label>
@@ -504,5 +745,42 @@ function Campo({
       <Label htmlFor={id}>{label}</Label>
       <Input id={id} value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
+  );
+}
+
+function SaudeSimNaoMotivo({
+  label,
+  sim,
+  motivo,
+  labelMotivo = "Motivo",
+  onChangeSim,
+  onChangeMotivo,
+}: {
+  label: string;
+  sim?: boolean;
+  motivo: string;
+  labelMotivo?: string;
+  onChangeSim: (v: boolean) => void;
+  onChangeMotivo: (v: string) => void;
+}) {
+  const id = React.useId();
+  return (
+    <fieldset className="space-y-1.5">
+      <legend className="mb-1.5 text-sm font-medium">{label}</legend>
+      <div className="flex gap-3 text-sm">
+        <label className="flex cursor-pointer items-center gap-1.5">
+          <input type="radio" name={id} checked={sim === true} onChange={() => onChangeSim(true)} /> Sim
+        </label>
+        <label className="flex cursor-pointer items-center gap-1.5">
+          <input type="radio" name={id} checked={sim === false} onChange={() => onChangeSim(false)} /> Não
+        </label>
+      </div>
+      {(sim || motivo) && (
+        <div className="space-y-1.5">
+          <Label htmlFor={`${id}-motivo`}>{labelMotivo}</Label>
+          <Input id={`${id}-motivo`} value={motivo} onChange={(e) => onChangeMotivo(e.target.value)} />
+        </div>
+      )}
+    </fieldset>
   );
 }

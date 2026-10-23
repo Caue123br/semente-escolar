@@ -15,6 +15,10 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useEntidade } from "@/lib/data/store";
 import { NovoRegistroBercarioModal } from "@/components/shared/novo-registro-bercario-modal";
+import { BebeBercarioModal } from "@/components/shared/bebe-bercario-modal";
+import { podeGerenciarAlunos } from "@/lib/access-control";
+import { usePerfil } from "@/lib/perfil-context";
+import type { BebeBercario } from "@/lib/mock-data/bercario";
 import { initials, cn } from "@/lib/utils";
 
 const ICONE_TIPO: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -48,9 +52,15 @@ const ROTINA_REFERENCIA = [
 ] as const;
 
 export default function BercarioPage() {
-  const { items: bebesBercario } = useEntidade("bercarioBebes");
+  const { perfil, carregando: carregandoPerfil } = usePerfil();
+  const gestao = !carregandoPerfil && podeGerenciarAlunos(perfil);
+  const { items: bebesBercario, carregando, erro } = useEntidade("bercarioBebes");
   const { items: registrosBercarioHoje } = useEntidade("bercarioRegistros");
+  const { items: turmas } = useEntidade("turmas");
   const [modalAberto, setModalAberto] = React.useState(false);
+  const [cadastroAberto, setCadastroAberto] = React.useState(false);
+  const [bebeEditando, setBebeEditando] = React.useState<BebeBercario | null>(null);
+  const pendentes = bebesBercario.filter((bebe) => !bebe.turmaId).length;
 
   const getBebe = (id: string) => bebesBercario.find((b) => b.id === id);
   const trocas = registrosBercarioHoje.filter((r) => r.tipo === "Troca").length;
@@ -71,10 +81,23 @@ export default function BercarioPage() {
             Sono, troca, alimentação e observações em tempo real.
           </p>
         </div>
-        <Button onClick={() => setModalAberto(true)}>
-          <Plus className="mr-2 h-4 w-4" /> Novo registro
-        </Button>
+        <div className="flex flex-wrap justify-end gap-2">
+          {gestao && <Button variant="outline" onClick={() => { setBebeEditando(null); setCadastroAberto(true); }}><Plus className="mr-2 h-4 w-4" /> Cadastrar bebê</Button>}
+          <Button onClick={() => setModalAberto(true)} disabled={bebesBercario.length === 0}>
+            <Plus className="mr-2 h-4 w-4" /> Novo registro
+          </Button>
+        </div>
       </div>
+
+      {erro && <p role="alert" className="rounded-lg border border-destructive/30 p-3 text-sm text-destructive">{erro}</p>}
+      {gestao && pendentes > 0 && (
+        <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          {pendentes} {pendentes === 1 ? "bebê sem turma vinculada" : "bebês sem turma vinculada"}. O cadastro e o histórico estão preservados. Abra “Por bebê” e selecione “Editar cadastro e turma” para atribuir o acesso à equipe.
+        </p>
+      )}
+      {!carregando && !erro && bebesBercario.length === 0 && (
+        <p className="rounded-lg border p-4 text-sm text-muted-foreground">{gestao ? "Nenhum bebê cadastrado. Cadastre o bebê e selecione a turma responsável pela rotina." : "Nenhum bebê disponível nas suas turmas. A direção ou a coordenação pode conferir os vínculos de acesso."}</p>
+      )}
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="p-5">
@@ -170,6 +193,8 @@ export default function BercarioPage() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-2">
+                    <div className="text-xs text-muted-foreground">{turmas.find((turma) => turma.id === bebe.turmaId)?.nome ?? (bebe.turmaId ? "Turma vinculada" : "Sem turma — atribuição pendente")}</div>
+                    {gestao && <Button variant="outline" size="sm" className="w-full" onClick={() => { setBebeEditando(bebe); setCadastroAberto(true); }}>Editar cadastro e turma</Button>}
                     {regs.length === 0 && (
                       <div className="text-xs text-muted-foreground italic">
                         Sem registros hoje
@@ -228,6 +253,7 @@ export default function BercarioPage() {
         onFechar={() => setModalAberto(false)}
         bebes={bebesBercario}
       />
+      {cadastroAberto && gestao && <BebeBercarioModal key={bebeEditando?.id ?? "novo"} bebe={bebeEditando} turmas={turmas} onFechar={() => setCadastroAberto(false)} />}
     </div>
   );
 }

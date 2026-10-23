@@ -3,6 +3,8 @@ import { getDatabase } from "@/lib/db/postgres";
 import { seedAlunos, seedTurmas } from "@/lib/db/seed";
 import { rowToAluno } from "@/lib/db/mappers";
 import { formatDateBR } from "@/lib/utils";
+import { formatarPeriodoMatricula } from "@/lib/periodos-matricula";
+import { formatarTelefone } from "@/lib/cpf";
 import { FichaImprimir } from "./ficha-imprimir";
 
 export const runtime = "nodejs";
@@ -49,6 +51,7 @@ export default async function FichaPage({ params }: PageProps) {
   const pai = aluno.responsaveis.find((r) => r.parentesco === "Pai");
   const mae = aluno.responsaveis.find((r) => r.parentesco === "Mãe");
   const saude = aluno.fichaSaude;
+  const periodo = formatarPeriodoMatricula(aluno.periodo) || turma.turno;
 
   return (
     <div className="min-h-screen bg-gray-100 print:bg-white">
@@ -91,10 +94,13 @@ export default async function FichaPage({ params }: PageProps) {
           <Linha label="Nome" value={aluno.nome} secLabel="Raça" secValue={aluno.raca} />
           <Linha label="RA" value={aluno.ra} secLabel="Sexo" secValue={aluno.sexo === "M" ? "Masculino" : aluno.sexo === "F" ? "Feminino" : ""} />
           <Linha label="Data de nascimento" value={formatDateBR(aluno.dataNascimento)} secLabel="Estado" secValue={aluno.estado} />
-          <Linha label="Natural de" value={aluno.naturalDe} secLabel="Período" secValue={turma.turno} />
-          <Linha label="Nível" value={turma.serie} secLabel="CEP" secValue={aluno.cep} />
+          <Linha label="Natural de" value={aluno.naturalDe} secLabel="Nível" secValue={turma.serie} />
+          <div className="flex items-baseline gap-2 border-b border-gray-300 py-1">
+            <span className="text-gray-700 text-xs whitespace-nowrap">Período:</span>
+            <span>{periodo}</span>
+          </div>
           <Linha label="Endereço" value={aluno.endereco} secLabel="Fone" secValue={aluno.telefoneAluno} />
-          <Linha label="Bairro" value={aluno.bairro} />
+          <Linha label="Bairro" value={aluno.bairro} secLabel="CEP" secValue={aluno.cep} />
         </section>
 
         {/* Dados do pai */}
@@ -133,19 +139,22 @@ export default async function FichaPage({ params }: PageProps) {
 
         {/* Pessoas autorizadas */}
         <section className="text-sm border-b border-gray-300 pb-3 mb-3">
-          <div className="grid grid-cols-2 gap-x-8 mb-2">
-            <div className="font-bold text-gray-700">Pessoas autorizadas a sair com o aluno:</div>
-            <div className="font-bold text-gray-700">Grau de parentesco:</div>
+          <div className="font-bold text-gray-700 mb-1">Pessoas autorizadas a sair com o aluno:</div>
+          <div className="grid grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)_minmax(0,1fr)] gap-x-3 text-xs font-bold text-gray-700">
+            <div>Nome:</div>
+            <div>Parentesco:</div>
+            <div>Telefone:</div>
           </div>
           {[0, 1, 2, 3, 4].map((i) => {
             const p = aluno.pessoasAutorizadas?.[i];
             return (
-              <div key={i} className="grid grid-cols-2 gap-x-8">
-                <div className="border-b border-gray-300 py-1">
+              <div key={i} className="grid grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)_minmax(0,1fr)] gap-x-3 text-xs">
+                <div className="min-w-0 break-words border-b border-gray-300 py-1">
                   <span className="text-xs text-gray-500 mr-2">{String(i + 1).padStart(2, "0")}</span>
                   {p?.nome ?? ""}
                 </div>
-                <div className="border-b border-gray-300 py-1">{p?.parentesco ?? ""}</div>
+                <div className="min-w-0 break-words border-b border-gray-300 py-1">{p?.parentesco ?? ""}</div>
+                <div className="border-b border-gray-300 py-1 whitespace-nowrap">{formatarTelefone(p?.telefone ?? "")}</div>
               </div>
             );
           })}

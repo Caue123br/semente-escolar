@@ -1,10 +1,10 @@
 "use client";
 
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { formatBRL, cn } from "@/lib/utils";
+import { formatBRL, cn, formatDateLocalISO } from "@/lib/utils";
 import { useEntidade } from "@/lib/data/store";
 import { usePeriodoContexto } from "@/lib/contexto-periodo";
-import { somaEmAberto, somaRecebida } from "@/lib/financeiro-mensalidades";
+import { somaEmAberto, resumoFinanceiro } from "@/lib/financeiro-mensalidades";
 
 interface Linha {
   rotulo: string;
@@ -31,6 +31,7 @@ const CATEGORIAS_DETALHADAS = [
 export function DreTab() {
   const { periodo } = usePeriodoContexto();
   const { items: mensalidades } = useEntidade("mensalidades");
+  const { items: cobrancas } = useEntidade("cobrancas");
   const { items: vendas } = useEntidade("vendas");
   const { items: despesas } = useEntidade("despesas");
   const { items: funcionarios } = useEntidade("funcionarios");
@@ -38,10 +39,10 @@ export function DreTab() {
   // Receitas do período. Receita realizada = o que entrou (valor_pago), pelo critério
   // único de lib/financeiro-mensalidades; o que falta entrar aparece em linha
   // informativa, fora do resultado.
-  // TODO(auditoria): o espelho de /api/cobrancas/gerar só copia cobranças de tipo
-  // "mensalidade" — as taxas de matrícula recebidas não aparecem no DRE.
   const mensalidadesDoMes = mensalidades.filter((m) => m.competencia === periodo.competencia);
-  const recMensalidades = somaRecebida(mensalidadesDoMes);
+  const resumo = resumoFinanceiro(mensalidades, cobrancas, periodo.competencia, formatDateLocalISO());
+  const recMensalidades = resumo.recebidoMensalidades;
+  const recMatriculas = resumo.recebidoMatriculas;
   const mensalidadesAReceber = somaEmAberto(mensalidadesDoMes);
 
   const vendasDoMes = vendas.filter((v) => v.data >= periodo.inicio && v.data <= periodo.fim);
@@ -49,7 +50,7 @@ export function DreTab() {
   const recEventos = vendasDoMes.filter((v) => v.tipo === "Evento/Festa" || v.tipo === "Atividade Extra").reduce((a, v) => a + v.total, 0);
   const recAlimentacao = vendasDoMes.filter((v) => v.tipo === "Alimentação Extra").reduce((a, v) => a + v.total, 0);
 
-  const receitaBruta = recMensalidades + recUniformes + recEventos + recAlimentacao;
+  const receitaBruta = recMensalidades + recMatriculas + recUniformes + recEventos + recAlimentacao;
 
   // Despesas lançadas no período (pagas ou a pagar)
   const despesasDoMes = despesas.filter((d) => d.data >= periodo.inicio && d.data <= periodo.fim);
@@ -110,6 +111,7 @@ export function DreTab() {
   const linhas: Linha[] = [
     { rotulo: "RECEITA OPERACIONAL BRUTA", valor: receitaBruta, tipo: "receita" },
     { rotulo: "Mensalidades recebidas", valor: recMensalidades, tipo: "receita", indent: 1 },
+    { rotulo: "Taxas de matrícula recebidas", valor: recMatriculas, tipo: "receita", indent: 1 },
     {
       rotulo: "Mensalidades faturadas ainda não recebidas (fora do resultado)",
       valor: mensalidadesAReceber,

@@ -4,6 +4,7 @@ set +x
 umask 077
 
 backup_dir=/srv/semente/shared/backups
+uploads_dir=/srv/semente/shared/uploads
 database_name=semente_prod
 cluster_port=5433
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
@@ -12,12 +13,18 @@ install -d -o root -g root -m 0700 "${backup_dir}"
 exec 9>/run/lock/semente-db-backup.lock
 flock -n 9 || exit 0
 
+if [[ ! -d "${uploads_dir}" ]]; then
+  echo "Pasta de fotos indisponível; os backups anteriores foram preservados." >&2
+  exit 1
+fi
+
 database_tmp=$(mktemp "${backup_dir}/.database-${stamp}.XXXXXX")
 globals_tmp=$(mktemp "${backup_dir}/.globals-${stamp}.XXXXXX")
 config_tmp=$(mktemp "${backup_dir}/.config-${stamp}.XXXXXX")
+uploads_tmp=$(mktemp "${backup_dir}/.uploads-${stamp}.XXXXXX")
 
 cleanup() {
-  rm -f "${database_tmp}" "${globals_tmp}" "${config_tmp}"
+  rm -f "${database_tmp}" "${globals_tmp}" "${config_tmp}" "${uploads_tmp}"
 }
 trap cleanup EXIT
 
@@ -42,15 +49,22 @@ tar -czf "${config_tmp}" \
   /etc/systemd/system/semente.service \
   /srv/semente/current/db/migrations
 
+# As fotos têm nomes únicos e são gravadas antes da URL no banco. Arquivá-las
+# depois do dump preserva os arquivos referenciados pelo snapshot do banco.
+tar -czf "${uploads_tmp}" -C "${uploads_dir}" .
+
 pg_restore --list "${database_tmp}" >/dev/null
+tar -tzf "${uploads_tmp}" >/dev/null
 
 database_final="${backup_dir}/database-${stamp}.dump"
 globals_final="${backup_dir}/globals-${stamp}.sql"
 config_final="${backup_dir}/config-${stamp}.tar.gz"
+uploads_final="${backup_dir}/uploads-${stamp}.tar.gz"
 mv "${database_tmp}" "${database_final}"
 mv "${globals_tmp}" "${globals_final}"
 mv "${config_tmp}" "${config_final}"
-sha256sum "${database_final}" "${globals_final}" "${config_final}" \
+mv "${uploads_tmp}" "${uploads_final}"
+sha256sum "${database_final}" "${globals_final}" "${config_final}" "${uploads_final}" \
   > "${backup_dir}/checksums-${stamp}.sha256"
 
 find "${backup_dir}" -maxdepth 1 -type f -mtime +7 -delete

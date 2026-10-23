@@ -11,34 +11,26 @@ import { formatBRL, cn, formatDateLocalISO } from "@/lib/utils";
 import { useEntidade } from "@/lib/data/store";
 import { usePeriodoContexto } from "@/lib/contexto-periodo";
 import { ComparacaoMesAnterior, MESES_PT_ABREV } from "@/components/shared/seletor-mes";
-import { dividaEmAberto, somaEmAberto, somaRecebida } from "@/lib/financeiro-mensalidades";
-import type { Mensalidade } from "@/lib/types";
-
-const soma = (lista: Mensalidade[]) => lista.reduce((a, m) => a + m.valor, 0);
+import { resumoFinanceiro, somaEmAberto } from "@/lib/financeiro-mensalidades";
 
 export function KpiRow() {
   const { periodo, periodoAnterior } = usePeriodoContexto();
   const { items: mensalidades } = useEntidade("mensalidades");
+  const { items: cobrancas } = useEntidade("cobrancas");
 
   const hoje = formatDateLocalISO();
 
   // Atual
   const doMes = mensalidades.filter((m) => m.competencia === periodo.competencia);
-  const recebido = somaRecebida(doMes);
-  const { atrasadas, aVencer } = dividaEmAberto(doMes, hoje);
-  const aReceber = somaEmAberto(aVencer);
-  const inadimplencia = somaEmAberto(atrasadas);
-  const faturado = soma(doMes);
-  const inadimplentesQtd = atrasadas.length;
-
+  const atual = resumoFinanceiro(mensalidades, cobrancas, periodo.competencia, hoje);
+  const { recebido, faturado, aReceber, inadimplencia } = atual;
+  const inadimplentesQtd = atual.familiasEmAtraso;
   const renegociadas = doMes.filter((m) => m.status === "Renegociada");
   const totalRenegociado = somaEmAberto(renegociadas);
-
-  // Anterior pra comparação
-  const doMesAnterior = mensalidades.filter((m) => m.competencia === periodoAnterior.competencia);
-  const faturadoAnterior = soma(doMesAnterior);
-  const recebidoAnterior = somaRecebida(doMesAnterior);
-  const inadimplenciaAnterior = somaEmAberto(dividaEmAberto(doMesAnterior, hoje).atrasadas);
+  const anterior = resumoFinanceiro(mensalidades, cobrancas, periodoAnterior.competencia, hoje);
+  const faturadoAnterior = anterior.faturado;
+  const recebidoAnterior = anterior.recebido;
+  const inadimplenciaAnterior = anterior.inadimplencia;
 
   const mesNome = MESES_PT_ABREV[periodo.mes];
 
@@ -51,7 +43,7 @@ export function KpiRow() {
         cor="text-primary"
         bg="bg-primary/10"
         comparacaoAnterior={faturadoAnterior}
-        rodape={`${doMes.length} mensalidades`}
+        rodape={`${doMes.length} mensalidades · ${atual.quantidadeMatriculas} parcelas de matrícula`}
       />
       <KpiCard
         label="Recebido"
@@ -68,7 +60,7 @@ export function KpiRow() {
         icone={Clock}
         cor="text-amber-500"
         bg="bg-amber-100"
-        rodape={`${aVencer.length} parcela${aVencer.length !== 1 ? "s" : ""} com vencimento a chegar`}
+        rodape={`${atual.parcelasNoPrazo} parcela${atual.parcelasNoPrazo !== 1 ? "s" : ""} com vencimento a chegar`}
       />
       <KpiCard
         label="Inadimplência"

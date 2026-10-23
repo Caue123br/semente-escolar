@@ -3,6 +3,9 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { objetoSimples, texto, textoOpcional } from "@/lib/api-input";
+import { podeAcessarModulo, podeGerenciarAlunos } from "@/lib/access-control";
+import { getUsuarioLogado } from "@/lib/db/auth";
+import { resolverEscopoProfessor } from "@/lib/db/professor-scope";
 import { registrarAudit } from "@/lib/db/audit";
 import { erros, sucesso } from "@/lib/db/api-response";
 import { rowToBebe } from "@/lib/db/mappers";
@@ -13,16 +16,26 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const usuario = await getUsuarioLogado();
+  if (!usuario) return erros.naoAutenticado();
+  if (!podeAcessarModulo(usuario.perfil, "bercario")) return erros.semPermissao("acessar o berçário");
   await seedBercario();
-  const { data, error } = await getDatabase()
-    .from("bercario_bebes")
-    .select("*")
-    .order("nome", { ascending: true });
+  let query = getDatabase().from("bercario_bebes").select("*").order("nome", { ascending: true });
+  try {
+    const escopo = await resolverEscopoProfessor(usuario);
+    if (escopo.restrito) query = query.in("turma_id", escopo.turmaIds);
+  } catch (error) {
+    return erros.servidorIndisponivel(error);
+  }
+  const { data, error } = await query;
   if (error) return erros.servidorIndisponivel(error);
   return NextResponse.json({ items: (data ?? []).map(rowToBebe) });
 }
 
 export async function POST(req: Request) {
+  const usuario = await getUsuarioLogado();
+  if (!usuario) return erros.naoAutenticado();
+  if (!podeGerenciarAlunos(usuario.perfil)) return erros.semPermissao("gerenciar bebês");
   let body: unknown;
   try {
     body = await req.json();
@@ -42,10 +55,21 @@ export async function POST(req: Request) {
   if (responsavel && responsavel.length > 200) return erros.dadosInvalidos("responsável");
   if (professora && professora.length > 200) return erros.dadosInvalidos("professora");
 
+  if (body.turmaId !== undefined && body.turmaId !== null && typeof body.turmaId !== "string") {
+    return erros.dadosInvalidos("turma");
+  }
+  const turmaId = texto(body.turmaId) || null;
+  if (turmaId && turmaId.length > 120) return erros.dadosInvalidos("turma");
+  if (turmaId) {
+    const { data: turma, error: erroTurma } = await getDatabase().from("turmas").select("id").eq("id", turmaId).maybeSingle();
+    if (erroTurma) return erros.servidorIndisponivel(erroTurma);
+    if (!turma) return erros.dadosInvalidos("turma não disponível nesta escola");
+  }
+
   const id = randomUUID();
   const { data, error } = await getDatabase()
     .from("bercario_bebes")
-    .insert({ id, nome, idade_meses: idadeMeses, responsavel, professora })
+    .insert({ id, nome, idade_meses: idadeMeses, responsavel, professora, turma_id: turmaId })
     .select("*")
     .single();
   if (error || !data) {

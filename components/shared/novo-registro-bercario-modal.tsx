@@ -28,12 +28,12 @@ export function NovoRegistroBercarioModal({ aberto, onFechar, bebes }: Props) {
   const [salvando, setSalvando] = React.useState(false);
 
   React.useEffect(() => {
-    if (bebes[0] && !bebeId) setBebeId(bebes[0].id);
+    if (!bebes.some((bebe) => bebe.id === bebeId)) setBebeId(bebes[0]?.id ?? "");
   }, [bebes, bebeId]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (salvando) return;
+    if (salvando || !bebes.some((bebe) => bebe.id === bebeId)) return;
     const hoje = formatDateLocalISO();
     const novo: RegistroBercario = {
       id: `bc-${Date.now()}`,
@@ -126,7 +126,7 @@ export function NovoRegistroBercarioModal({ aberto, onFechar, bebes }: Props) {
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onFechar} disabled={salvando}>Cancelar</Button>
-            <Button type="submit" disabled={salvando} className="bg-emerald-600 hover:bg-emerald-700">
+            <Button type="submit" disabled={salvando || bebes.length === 0} className="bg-emerald-600 hover:bg-emerald-700">
               {salvando ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Check className="mr-1.5 h-4 w-4" />}
               {salvando ? "Salvando..." : "Registrar"}
             </Button>

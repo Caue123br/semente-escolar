@@ -35,31 +35,27 @@ import { useToast } from "@/lib/toast";
 import { NovaMatriculaModal, limparRascunhoMatriculaVencido } from "@/components/alunos/nova-matricula-modal";
 import { EditarAlunoModal } from "@/components/alunos/editar-aluno-modal";
 import { UploadFotoAluno } from "@/components/alunos/upload-foto";
-import type { Aluno } from "@/lib/types";
+import type { Aluno, Turma } from "@/lib/types";
 import { NovaTurmaModal } from "@/components/alunos/nova-turma-modal";
+import { GerenciarTurmasModal } from "@/components/alunos/gerenciar-turmas-modal";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { filtrarAlunos, listarProfessorasTurmas, normalizarBuscaAlunos, temAlertaSaude, type OpcaoProfessora } from "@/lib/filtros-alunos";
 
 const STORAGE_FILTROS_ALUNOS = "alunos:filtros";
 const ALUNOS_POR_PAGINA = 25;
-
-/** "Ines" precisa achar "Inês": compara sem acento e sem caixa. */
-function normalizarBusca(valor: string): string {
-  return valor
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLocaleLowerCase("pt-BR");
-}
 
 export default function AlunosPage() {
   const { perfil } = usePerfil();
   const podeGerenciar = podeGerenciarAlunos(perfil);
   const [busca, setBusca] = React.useState("");
   const [turmaFiltro, setTurmaFiltro] = React.useState("todas");
+  const [professoraFiltro, setProfessoraFiltro] = React.useState("todas");
+  const [buscaAlergia, setBuscaAlergia] = React.useState("");
   const [bilinguismo, setBilinguismo] = React.useState("todos");
   const [comAlergia, setComAlergia] = React.useState(false);
   const [modalAberto, setModalAberto] = React.useState(false);
   const [modalTurmaAberto, setModalTurmaAberto] = React.useState(false);
+  const [modalGerenciarTurmasAberto, setModalGerenciarTurmasAberto] = React.useState(false);
   const [confirmarExcluir, setConfirmarExcluir] = React.useState<{ id: string; nome: string } | null>(null);
   const [editando, setEditando] = React.useState<Aluno | null>(null);
   const [pagina, setPagina] = React.useState(1);
@@ -79,6 +75,7 @@ export default function AlunosPage() {
     carregando: carregandoTurmas,
     erro: erroTurmas,
     add: addTurma,
+    update: atualizarTurma,
   } = useEntidade("turmas");
   const carregando = carregandoAlunos || carregandoTurmas;
 
@@ -95,6 +92,7 @@ export default function AlunosPage() {
     try {
       const f = JSON.parse(raw);
       if (typeof f.turmaFiltro === "string") setTurmaFiltro(f.turmaFiltro);
+      if (typeof f.professoraFiltro === "string") setProfessoraFiltro(f.professoraFiltro);
       if (typeof f.bilinguismo === "string") setBilinguismo(f.bilinguismo);
       if (typeof f.comAlergia === "boolean") setComAlergia(f.comAlergia);
     } catch {
@@ -106,9 +104,9 @@ export default function AlunosPage() {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(
       STORAGE_FILTROS_ALUNOS,
-      JSON.stringify({ turmaFiltro, bilinguismo, comAlergia })
+      JSON.stringify({ turmaFiltro, professoraFiltro, bilinguismo, comAlergia })
     );
-  }, [turmaFiltro, bilinguismo, comAlergia]);
+  }, [turmaFiltro, professoraFiltro, bilinguismo, comAlergia]);
 
   const handleExcluir = async () => {
     if (!confirmarExcluir) return;
@@ -128,24 +126,36 @@ export default function AlunosPage() {
     if (criado) setFotoNovoAluno(criado);
   };
 
-  const buscaNormalizada = normalizarBusca(busca);
-  const filtrados = alunos.filter((a) => {
-    const mB = buscaNormalizada ? normalizarBusca(a.nome).includes(buscaNormalizada) : true;
-    const mT = turmaFiltro === "todas" || a.turmaId === turmaFiltro;
-    const mBL = bilinguismo === "todos" || (bilinguismo === "sim" ? a.bilingue : !a.bilingue);
-    const mAlergia = !comAlergia || Boolean(a.fichaSaude?.alergias?.trim());
-    return mB && mT && mBL && mAlergia;
-  });
-
   const turmasMap = React.useMemo(() => new Map(turmas.map((t) => [t.id, t])), [turmas]);
+  const professoras = React.useMemo(() => listarProfessorasTurmas(turmas), [turmas]);
+  const filtrados = filtrarAlunos(alunos, turmas, {
+    busca, turmaFiltro, professoraFiltro, bilinguismo, comAlergia: podeGerenciar && comAlergia,
+  });
+  const alunosComAlertaSaude = podeGerenciar ? alunos.filter(temAlertaSaude) : [];
+  const filtradosSaude = filtrarAlunos(alunosComAlertaSaude, turmas, { turmaFiltro, professoraFiltro, buscaAlergia });
+  const filtrosListaAtivos = Boolean(normalizarBuscaAlunos(busca) || turmaFiltro !== "todas" || professoraFiltro !== "todas" || bilinguismo !== "todos" || (podeGerenciar && comAlergia));
+  const filtrosSaudeAtivos = Boolean(normalizarBuscaAlunos(buscaAlergia) || turmaFiltro !== "todas" || professoraFiltro !== "todas");
+  const limparFiltrosLista = () => {
+    setBusca("");
+    setTurmaFiltro("todas");
+    setProfessoraFiltro("todas");
+    setBilinguismo("todos");
+    setComAlergia(false);
+  };
+  const limparFiltrosSaude = () => {
+    setBuscaAlergia("");
+    setTurmaFiltro("todas");
+    setProfessoraFiltro("todas");
+  };
 
-  type AlunoSortKey = "nome" | "matricula" | "turma" | "nascimento" | "status";
+  type AlunoSortKey = "nome" | "matricula" | "turma" | "professora" | "nascimento" | "status";
   const { sort, toggle, sorted: ordenados } = useSort<typeof filtrados[number], AlunoSortKey>(
     filtrados,
     (a, k) => {
       if (k === "nome") return a.nome.toLowerCase();
       if (k === "matricula") return a.matricula ?? "";
       if (k === "turma") return turmasMap.get(a.turmaId)?.nome ?? "";
+      if (k === "professora") return normalizarBuscaAlunos(turmasMap.get(a.turmaId)?.professorNome ?? "");
       if (k === "nascimento") return a.dataNascimento;
       if (k === "status") return a.status;
       return "";
@@ -159,7 +169,7 @@ export default function AlunosPage() {
   // Mudou filtro/busca: volta pra primeira página. Encolheu a lista: não fica em página vazia.
   React.useEffect(() => {
     setPagina(1);
-  }, [busca, turmaFiltro, bilinguismo, comAlergia]);
+  }, [busca, turmaFiltro, professoraFiltro, bilinguismo, comAlergia]);
   React.useEffect(() => {
     if (pagina > totalPaginas) setPagina(totalPaginas);
   }, [pagina, totalPaginas]);
@@ -167,13 +177,14 @@ export default function AlunosPage() {
   const exportarCSV = () => {
     const linhas = podeGerenciar
       ? [
-          ["Nome", "Matrícula", "Turma", "Nascimento", "CPF", "Status", "Responsável", "Telefone", "Email"],
+          ["Nome", "Matrícula", "Sala/Turma", "Professora", "Nascimento", "CPF", "Status", "Responsável", "Telefone", "Email"],
           ...ordenados.map((a) => {
             const resp = a.responsaveis.find((r) => r.principal) ?? a.responsaveis[0];
             return [
               a.nome,
               a.matricula,
               turmasMap.get(a.turmaId)?.nome ?? "",
+              turmasMap.get(a.turmaId)?.professorNome ?? "",
               a.dataNascimento,
               a.cpf ?? "",
               a.status,
@@ -184,11 +195,12 @@ export default function AlunosPage() {
           }),
         ]
       : [
-          ["Nome", "Matrícula", "Turma", "Nascimento", "Status"],
+          ["Nome", "Matrícula", "Sala/Turma", "Professora", "Nascimento", "Status"],
           ...ordenados.map((a) => [
             a.nome,
             a.matricula,
             turmasMap.get(a.turmaId)?.nome ?? "",
+            turmasMap.get(a.turmaId)?.professorNome ?? "",
             a.dataNascimento,
             a.status,
           ]),
@@ -239,6 +251,9 @@ export default function AlunosPage() {
         </div>
         {podeGerenciar && (
           <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="outline" onClick={() => setModalGerenciarTurmasAberto(true)}>
+              Turmas e professoras
+            </Button>
             <Button variant="outline" onClick={() => setModalTurmaAberto(true)}>
               <Plus className="mr-2 h-4 w-4" /> Nova turma
             </Button>
@@ -298,6 +313,14 @@ export default function AlunosPage() {
         onClose={() => setModalTurmaAberto(false)}
         onSalvar={addTurma}
       />
+      {podeGerenciar && (
+        <GerenciarTurmasModal
+          aberto={modalGerenciarTurmasAberto}
+          onClose={() => setModalGerenciarTurmasAberto(false)}
+          turmas={turmas}
+          onSalvar={atualizarTurma}
+        />
+      )}
 
       {(erroAlunos || erroTurmas) && (
         <div className="flex items-start gap-3 rounded-lg border border-danger/30 bg-danger/10 p-4 text-sm text-danger">
@@ -384,20 +407,14 @@ export default function AlunosPage() {
                       className="pl-9 w-56"
                     />
                   </div>
-                  <Select value={turmaFiltro} onValueChange={setTurmaFiltro}>
-                    <SelectTrigger className="w-44">
-                      <Filter className="mr-1 h-4 w-4" />
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todas">Todas as turmas</SelectItem>
-                      {turmas.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          {t.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FiltrosSalaProfessora
+                    turmaFiltro={turmaFiltro}
+                    setTurmaFiltro={setTurmaFiltro}
+                    professoraFiltro={professoraFiltro}
+                    setProfessoraFiltro={setProfessoraFiltro}
+                    turmas={turmas}
+                    professoras={professoras}
+                  />
                   <Select value={bilinguismo} onValueChange={setBilinguismo}>
                     <SelectTrigger className="w-36">
                       <SelectValue />
@@ -419,6 +436,9 @@ export default function AlunosPage() {
                       Só com alergia
                     </label>
                   )}
+                  <Button variant="ghost" size="sm" onClick={limparFiltrosLista} disabled={!filtrosListaAtivos}>
+                    Limpar filtros
+                  </Button>
                   <Button variant="outline" size="sm" onClick={exportarCSV} disabled={ordenados.length === 0}>
                     <Download className="mr-2 h-4 w-4" /> Exportar CSV
                   </Button>
@@ -427,11 +447,11 @@ export default function AlunosPage() {
             </CardHeader>
             <CardContent className="px-0 overflow-x-auto">
               {carregando && filtrados.length === 0 && (
-                <SkeletonTableRows rows={6} cols={7} />
+                <SkeletonTableRows rows={6} cols={podeGerenciar ? 8 : 7} />
               )}
               {!carregando && filtrados.length === 0 && (
                 <div className="p-8 text-center text-sm text-muted-foreground">
-                  {busca || turmaFiltro !== "todas" || bilinguismo !== "todos"
+                  {filtrosListaAtivos
                     ? "Nenhum aluno corresponde aos filtros aplicados."
                     : turmas.length === 0
                       ? "Crie uma turma para começar a matricular alunos."
@@ -444,7 +464,8 @@ export default function AlunosPage() {
                   <TableRow>
                     <SortHeader active={sort.key === "nome"} direction={sort.direction} onClick={() => toggle("nome")}>Aluno</SortHeader>
                     <SortHeader active={sort.key === "matricula"} direction={sort.direction} onClick={() => toggle("matricula")}>Matrícula</SortHeader>
-                    <SortHeader active={sort.key === "turma"} direction={sort.direction} onClick={() => toggle("turma")}>Turma</SortHeader>
+                    <SortHeader active={sort.key === "turma"} direction={sort.direction} onClick={() => toggle("turma")}>Sala/Turma</SortHeader>
+                    <SortHeader active={sort.key === "professora"} direction={sort.direction} onClick={() => toggle("professora")}>Professora</SortHeader>
                     <SortHeader active={sort.key === "nascimento"} direction={sort.direction} onClick={() => toggle("nascimento")}>Nascimento</SortHeader>
                     {podeGerenciar && <TableHead>Responsável principal</TableHead>}
                     <SortHeader active={sort.key === "status"} direction={sort.direction} onClick={() => toggle("status")}>Status</SortHeader>
@@ -453,7 +474,7 @@ export default function AlunosPage() {
                 </TableHeader>
                 <TableBody>
                   {visiveis.map((a) => {
-                    const turma = turmas.find((t) => t.id === a.turmaId);
+                    const turma = turmasMap.get(a.turmaId);
                     const resp = a.responsaveis.find((r) => r.principal) ?? a.responsaveis[0];
                     return (
                       <TableRow key={a.id}>
@@ -488,7 +509,8 @@ export default function AlunosPage() {
                         <TableCell className="text-sm text-muted-foreground">
                           {a.matricula}
                         </TableCell>
-                        <TableCell>{turma?.nome}</TableCell>
+                        <TableCell>{turma?.nome || "Não informada"}</TableCell>
+                        <TableCell className="text-sm">{turma?.professorNome?.trim() || "Sem professora vinculada"}</TableCell>
                         <TableCell className="text-sm">
                           {formatDateBR(a.dataNascimento)}
                         </TableCell>
@@ -634,40 +656,64 @@ export default function AlunosPage() {
             <CardHeader>
               <CardTitle>Fichas de saúde com alergias / restrições</CardTitle>
               <CardDescription>
-                Alergias e tratamentos médicos registrados na ficha de matrícula
+                {filtradosSaude.length} de {alunosComAlertaSaude.length} alunos com alergia ou tratamento médico registrado
               </CardDescription>
+              <div className="flex flex-wrap items-center gap-2 pt-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    aria-label="Buscar alergia específica"
+                    placeholder="Buscar alergia: leite, lactose..."
+                    value={buscaAlergia}
+                    onChange={(e) => setBuscaAlergia(e.target.value)}
+                    className="w-72 pl-9"
+                  />
+                </div>
+                <FiltrosSalaProfessora
+                  turmaFiltro={turmaFiltro}
+                  setTurmaFiltro={setTurmaFiltro}
+                  professoraFiltro={professoraFiltro}
+                  setProfessoraFiltro={setProfessoraFiltro}
+                  turmas={turmas}
+                  professoras={professoras}
+                />
+                <Button variant="ghost" size="sm" onClick={limparFiltrosSaude} disabled={!filtrosSaudeAtivos}>
+                  Limpar filtros
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {(() => {
-                  const comAlerta = alunos.filter(
-                    (a) => a.fichaSaude?.alergias || a.fichaSaude?.tratamentoMedicoSim
-                  );
-                  if (comAlerta.length === 0) {
-                    return (
-                      <div className="text-sm text-muted-foreground text-center py-8">
-                        Nenhum aluno com alergia/tratamento médico registrado.
-                        <br />
-                        Preencha a etapa Saúde ao matricular pra aparecer aqui.
-                      </div>
-                    );
-                  }
-                  return comAlerta.map((a) => (
+                {carregando && filtradosSaude.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-muted-foreground">Carregando fichas de saúde...</div>
+                ) : filtradosSaude.length === 0 ? (
+                  <div className="text-sm text-muted-foreground text-center py-8">
+                    {filtrosSaudeAtivos ? (
+                      <>Nenhum aluno corresponde à alergia, sala ou professora selecionada. Ajuste a busca ou limpe os filtros.</>
+                    ) : (
+                      <>Nenhum aluno com alergia/tratamento médico registrado.<br />Preencha a etapa Saúde ao matricular pra aparecer aqui.</>
+                    )}
+                  </div>
+                ) : filtradosSaude.map((a) => (
                     <div
                       key={a.id}
                       className="flex items-start gap-3 rounded-lg border-l-4 border-l-danger bg-danger/5 p-4"
                     >
                       <Heart className="h-5 w-5 text-danger mt-0.5" />
                       <div className="flex-1">
-                        <div className="font-semibold text-sm">{a.nome}</div>
+                        <Link href={`/alunos/${a.id}`} className="font-semibold text-sm hover:underline">{a.nome}</Link>
+                        <div className="mb-1 text-xs text-muted-foreground">
+                          {turmasMap.get(a.turmaId)?.nome || "Sala/turma não informada"}
+                          {" · "}{turmasMap.get(a.turmaId)?.professorNome?.trim() || "Sem professora vinculada"}
+                        </div>
                         {a.fichaSaude?.alergias && (
                           <div className="text-sm text-muted-foreground">
                             <strong>Alergias:</strong> {a.fichaSaude.alergias}
                           </div>
                         )}
-                        {a.fichaSaude?.tratamentoMedicoSim && a.fichaSaude.tratamentoMotivo && (
+                        {a.fichaSaude?.tratamentoMedicoSim && (
                           <div className="text-sm text-muted-foreground">
-                            <strong>Tratamento:</strong> {a.fichaSaude.tratamentoMotivo}
+                            <strong>Tratamento:</strong> {a.fichaSaude.tratamentoMotivo?.trim() || "Em tratamento médico; motivo não informado."}
                           </div>
                         )}
                         {a.fichaSaude?.medicoNome && (
@@ -677,8 +723,7 @@ export default function AlunosPage() {
                         )}
                       </div>
                     </div>
-                  ));
-                })()}
+                  ))}
               </div>
             </CardContent>
           </Card>
@@ -699,5 +744,49 @@ export default function AlunosPage() {
         onFechar={() => setConfirmarExcluir(null)}
       />
     </div>
+  );
+}
+
+function FiltrosSalaProfessora({
+  turmaFiltro,
+  setTurmaFiltro,
+  professoraFiltro,
+  setProfessoraFiltro,
+  turmas,
+  professoras,
+}: {
+  turmaFiltro: string;
+  setTurmaFiltro: (valor: string) => void;
+  professoraFiltro: string;
+  setProfessoraFiltro: (valor: string) => void;
+  turmas: Turma[];
+  professoras: OpcaoProfessora[];
+}) {
+  return (
+    <>
+      <Select value={turmaFiltro} onValueChange={setTurmaFiltro}>
+        <SelectTrigger className="w-48" aria-label="Filtrar por sala ou turma">
+          <Filter className="mr-1 h-4 w-4" />
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="todas">Todas as salas/turmas</SelectItem>
+          {turmas.map((turma) => (
+            <SelectItem key={turma.id} value={turma.id}>{turma.nome}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select value={professoraFiltro} onValueChange={setProfessoraFiltro}>
+        <SelectTrigger className="w-56" aria-label="Filtrar por professora">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="todas">Todas as professoras</SelectItem>
+          {professoras.map((professora) => (
+            <SelectItem key={professora.valor} value={professora.valor}>{professora.nome}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </>
   );
 }

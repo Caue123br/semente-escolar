@@ -22,6 +22,7 @@ import {
 import { useEntidade } from "@/lib/data/store";
 import { useToast } from "@/lib/toast";
 import { formatBRL, formatDateLocalISO } from "@/lib/utils";
+import { dividaEmAberto, diasAtrasoDe, emAbertoDe, emAbertoCobranca, recebimentosFinanceiros, somaEmAberto } from "@/lib/financeiro-mensalidades";
 import { usePerfil } from "@/lib/perfil-context";
 import { ultimasAvaliacoesPorAluno } from "@/lib/pedagogico";
 
@@ -33,6 +34,9 @@ export default function RelatoriosPage() {
   const { items: turmas } = useEntidade("turmas", { habilitado: !carregandoPerfil && podeAcademico });
   const { items: avaliacoes } = useEntidade("avaliacoes", { habilitado: !carregandoPerfil && podeAcademico });
   const { items: mensalidades } = useEntidade("mensalidades", { habilitado: !carregandoPerfil && podeFinanceiro });
+  const { items: cobrancas } = useEntidade("cobrancas", { habilitado: !carregandoPerfil && podeFinanceiro });
+  const hoje = formatDateLocalISO();
+  const matriculasAtrasadas = cobrancas.filter((c) => c.tipo === "matricula" && c.vencimento < hoje && emAbertoCobranca(c) > 0);
   const toast = useToast();
 
   // Ocupação real
@@ -87,31 +91,40 @@ export default function RelatoriosPage() {
   const exportarFinanceiro = () => {
     exportarCSV(
       `financeiro-${formatDateLocalISO()}.csv`,
-      ["Competência", "Aluno", "Turma", "Vencimento", "Valor", "Pago em", "Forma", "Status", "Dias atraso"],
-      mensalidades.map((m) => [
+      ["Tipo", "Competência", "Aluno", "Turma", "Vencimento", "Valor", "Recebido", "Saldo", "Pago em", "Forma", "Status", "Dias atraso"],
+      [...mensalidades.map((m) => [
+        "Mensalidade",
         m.competencia,
         m.alunoNome,
         m.turmaNome,
         m.vencimento,
         m.valor,
+        m.valorPago ?? (m.status === "Paga" ? m.valor : 0),
+        emAbertoDe(m),
         m.dataPagamento ?? "",
         m.formaPagamento ?? "",
         m.status,
-        m.diasAtraso,
-      ])
+        m.status === "Paga" ? 0 : diasAtrasoDe(m, hoje),
+      ]), ...cobrancas.filter((c) => c.tipo === "matricula").map((c) => [
+        "Matrícula", c.vencimento.slice(0, 7), mensalidades.find((m) => m.alunoId === c.alunoId)?.alunoNome ?? c.descricao,
+        "", c.vencimento, c.valor, c.valorPago ?? (c.status === "Pago" ? c.valor : 0),
+        emAbertoCobranca(c), c.dataPagamento ?? "", c.formaPagamento ?? "", c.status,
+        c.status === "Pago" ? 0 : diasAtrasoDe({ vencimento: c.vencimento, diasAtraso: 0 }, hoje),
+      ])]
     );
   };
 
   const exportarInadimplencia = () => {
-    const atrasadas = mensalidades.filter((m) => m.status === "Atrasada");
-    if (atrasadas.length === 0) {
-      toast.info?.("Sem inadimplência", "Nenhuma mensalidade atrasada — show!");
+    const atrasadas = dividaEmAberto(mensalidades, hoje).atrasadas;
+    if (atrasadas.length === 0 && matriculasAtrasadas.length === 0) {
+      toast.info?.("Sem inadimplência", "Nenhuma mensalidade ou matrícula em atraso.");
       return;
     }
     exportarCSV(
       `inadimplencia-${formatDateLocalISO()}.csv`,
       ["Aluno", "Turma", "Competência", "Vencimento", "Valor", "Dias em atraso"],
-      atrasadas.map((m) => [m.alunoNome, m.turmaNome, m.competencia, m.vencimento, m.valor, m.diasAtraso])
+      [...atrasadas.map((m) => [m.alunoNome, m.turmaNome, m.competencia, m.vencimento, emAbertoDe(m), diasAtrasoDe(m, hoje)]),
+        ...matriculasAtrasadas.map((c) => [mensalidades.find((m) => m.alunoId === c.alunoId)?.alunoNome ?? c.descricao, "Matrícula", c.vencimento.slice(0, 7), c.vencimento, emAbertoCobranca(c), diasAtrasoDe({ vencimento: c.vencimento, diasAtraso: 0 }, hoje)])]
     );
   };
 
@@ -124,8 +137,8 @@ export default function RelatoriosPage() {
   };
 
   const alunosAtivos = alunos.filter((a) => a.status === "Ativo").length;
-  const totalMensalidadesPagas = mensalidades.filter((m) => m.status === "Paga").reduce((a, m) => a + (m.valorPago ?? m.valor), 0);
-  const totalInadimplencia = mensalidades.filter((m) => m.status === "Atrasada").reduce((a, m) => a + m.valor, 0);
+  const totalMensalidadesPagas = recebimentosFinanceiros(mensalidades, cobrancas).reduce((s, r) => s + r.valor, 0);
+  const totalInadimplencia = somaEmAberto(dividaEmAberto(mensalidades, hoje).atrasadas) + matriculasAtrasadas.reduce((s, c) => s + emAbertoCobranca(c), 0);
   const avaliacoesAtuais = ultimasAvaliacoesPorAluno(alunos, avaliacoes);
 
   if (carregandoPerfil) {
@@ -200,7 +213,7 @@ export default function RelatoriosPage() {
             {podeFinanceiro && <RelatorioCard
               icone={Banknote}
               nome="Financeiro completo"
-              desc="Todas as mensalidades (pagas, em aberto, atrasadas)"
+              desc="Mensalidades e matrículas (pagas, em aberto, atrasadas)"
               formato="CSV"
               onGerar={exportarFinanceiro}
             />}

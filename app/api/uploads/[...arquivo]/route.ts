@@ -3,6 +3,9 @@ import path from "node:path";
 
 import { NextResponse } from "next/server";
 
+import { podeAcessarModulo } from "@/lib/access-control";
+import { getDatabase } from "@/lib/db/postgres";
+import { professorPodeAcessarTurma, resolverEscopoProfessor } from "@/lib/db/professor-scope";
 import { getUsuarioLogado } from "@/lib/db/auth";
 
 export const runtime = "nodejs";
@@ -36,6 +39,7 @@ export async function GET(
 ) {
   const usuario = await getUsuarioLogado();
   if (!usuario) return new NextResponse(null, { status: 401 });
+  if (!podeAcessarModulo(usuario.perfil, "alunos")) return new NextResponse(null, { status: 403 });
 
   const { arquivo } = await params;
   const escolaId = process.env.SCHOOL_ID ?? "default";
@@ -46,6 +50,19 @@ export async function GET(
     arquivo.some((segmento) => !SEGMENTO.test(segmento))
   ) {
     return new NextResponse(null, { status: 404 });
+  }
+
+  try {
+    const { data: aluno, error } = await getDatabase().from("alunos").select("id,turma_id")
+      .eq("id", arquivo[2]).maybeSingle();
+    if (error) return new NextResponse(null, { status: 500 });
+    if (!aluno) return new NextResponse(null, { status: 404 });
+    const escopo = await resolverEscopoProfessor(usuario);
+    if (!professorPodeAcessarTurma(escopo, String(aluno.turma_id ?? ""))) {
+      return new NextResponse(null, { status: 404 });
+    }
+  } catch {
+    return new NextResponse(null, { status: 500 });
   }
 
   const root = uploadsRoot();

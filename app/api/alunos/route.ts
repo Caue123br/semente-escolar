@@ -9,6 +9,7 @@ import { erroAPI, erros, sucesso } from "@/lib/db/api-response";
 import { limparCPF, validarCPF } from "@/lib/cpf";
 import { resolverEscopoProfessor } from "@/lib/db/professor-scope";
 import { formatDateLocalISO } from "@/lib/utils";
+import { normalizarPessoasAutorizadas, obterPeriodoMatricula } from "@/lib/periodos-matricula";
 import type { Aluno, Responsavel } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -159,6 +160,7 @@ const CAMPOS_DA_FICHA: readonly (keyof Aluno)[] = [
   "dataNascimento",
   "rg",
   "turmaId",
+  "periodo",
   "observacoes",
   "ra",
   "raca",
@@ -241,7 +243,9 @@ function assinaturaDaFicha(ficha: Partial<Aluno>): string {
   ];
   for (const campo of CAMPOS_DA_FICHA) partes.push(textoDaFicha(ficha[campo]));
   partes.push(responsaveisDaFicha(ficha.responsaveis));
-  partes.push(jsonDaFicha(ficha.pessoasAutorizadas ?? []));
+  // Compara os dígitos: a máscara digitada não muda o telefone gravado.
+  const autorizadas = normalizarPessoasAutorizadas(ficha.pessoasAutorizadas ?? []);
+  partes.push(jsonDaFicha(autorizadas.ok ? autorizadas.lista : ficha.pessoasAutorizadas));
   partes.push(jsonDaFicha(ficha.fichaSaude ?? null));
   return JSON.stringify(partes);
 }
@@ -381,6 +385,8 @@ export async function POST(req: Request) {
   const dataNascimento = typeof a?.dataNascimento === "string" ? a.dataNascimento : "";
   const turmaId = typeof a?.turmaId === "string" ? a.turmaId.trim() : "";
   const cpf = typeof a?.cpf === "string" ? limparCPF(a.cpf) : "";
+  const periodoRecebido: unknown = a.periodo;
+  const periodo = obterPeriodoMatricula(periodoRecebido);
   const hoje = formatDateLocalISO();
 
   // Antes de qualquer validação: chave já usada não cria nada, então o corpo do
@@ -404,6 +410,9 @@ export async function POST(req: Request) {
     return erros.dadosInvalidos("data de nascimento");
   }
   if (!turmaId) return erros.dadosInvalidos("turma");
+  if (periodoRecebido != null && periodoRecebido !== "" && !periodo) {
+    return erros.dadosInvalidos("período da matrícula");
+  }
   if (cpf && !validarCPF(cpf)) return erros.dadosInvalidos("CPF");
   if (a.responsaveis !== undefined && !Array.isArray(a.responsaveis)) {
     return erros.dadosInvalidos("responsáveis");
@@ -411,6 +420,8 @@ export async function POST(req: Request) {
   if (a.pessoasAutorizadas !== undefined && !Array.isArray(a.pessoasAutorizadas)) {
     return erros.dadosInvalidos("pessoas autorizadas");
   }
+  const pessoasAutorizadas = normalizarPessoasAutorizadas(a.pessoasAutorizadas ?? []);
+  if (!pessoasAutorizadas.ok) return erroAPI(pessoasAutorizadas.mensagem, 400);
   if (a.fichaSaude !== undefined && (typeof a.fichaSaude !== "object" || !a.fichaSaude)) {
     return erros.dadosInvalidos("ficha de saúde");
   }
@@ -533,6 +544,7 @@ export async function POST(req: Request) {
     cpf: cpf || null,
     rg: a.rg || null,
     turma_id: turmaId,
+    periodo: periodo?.valor ?? null,
     bilingue: Boolean(a.bilingue),
     matricula,
     data_matricula: dataMatricula,
@@ -553,7 +565,7 @@ export async function POST(req: Request) {
     religiao: a.religiao || null,
     escola_anterior_nome: a.escolaAnteriorNome || null,
     escola_anterior_tempo: a.escolaAnteriorTempo || null,
-    pessoas_autorizadas_json: a.pessoasAutorizadas || [],
+    pessoas_autorizadas_json: pessoasAutorizadas.lista,
     ficha_saude_json: a.fichaSaude || null,
   }).select("*").single();
 

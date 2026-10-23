@@ -10,11 +10,18 @@ import {
   sincronizarEspelho,
   type LinhaEspelhoRemovida,
 } from "@/lib/db/espelho-mensalidades";
+import { cobrancaAtualizada } from "@/lib/financeiro-mensalidades";
 import { formatDateLocalISO } from "@/lib/utils";
 import type { Cobranca } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+class ConflitoIdentidade extends Error {
+  constructor() {
+    super("Esta cobrança já pertence a outro aluno ou foi alterada em outra tela. Recarregue a ficha financeira.");
+  }
+}
 
 const competenciaDe = (vencimento: unknown) => String(vencimento ?? "").slice(0, 7);
 
@@ -25,7 +32,7 @@ export async function GET() {
     .select("*")
     .order("vencimento", { ascending: true });
   if (error) return erros.servidorIndisponivel(error);
-  return NextResponse.json({ items: (data ?? []).map(rowToCobranca) });
+  return NextResponse.json({ items: (data ?? []).map((row) => cobrancaAtualizada(rowToCobranca(row), formatDateLocalISO())) });
 }
 
 export async function POST(req: Request) {
@@ -63,13 +70,13 @@ export async function POST(req: Request) {
       // precisa ser refeito no espelho.
       const { data: anterior, error: erroAnterior } = await tx
         .from("cobrancas")
-        .select("tipo, vencimento")
+        .select("aluno_id, tipo, vencimento, status, valor, valor_pago")
         .eq("id", String(c.id))
         .maybeSingle();
       if (erroAnterior) throw new Error(erroAnterior.message);
 
-      const { error } = await tx.from("cobrancas").upsert(
-        {
+      if (anterior && String(anterior.aluno_id) !== alunoId) throw new ConflitoIdentidade();
+      const registro = {
           id: c.id,
           aluno_id: alunoId,
           tipo,
@@ -82,10 +89,22 @@ export async function POST(req: Request) {
           forma_pagamento: c.formaPagamento ?? null,
           parcela_num: c.parcelaNum ?? null,
           parcela_total: c.parcelaTotal ?? null,
-        },
-        { onConflict: "id" }
-      );
-      if (error) throw Object.assign(new Error(error.message), { code: error.code });
+        };
+      // Insert separado impede que dois criadores concorrentes transfiram um
+      // mesmo ID. Update exige a identidade lida, inclusive após corrida/delete.
+      if (anterior) {
+        const { id: _id, aluno_id: _alunoId, ...campos } = registro;
+        const { data: atualizada, error } = await tx.from("cobrancas")
+          .update(campos).eq("id", String(c.id)).eq("aluno_id", alunoId)
+          .eq("vencimento", anterior.vencimento).eq("tipo", anterior.tipo)
+          .eq("status", anterior.status).eq("valor", anterior.valor)
+          .is("valor_pago", anterior.valor_pago ?? null).select("id").maybeSingle();
+        if (error) throw Object.assign(new Error(error.message), { code: error.code });
+        if (!atualizada) throw new ConflitoIdentidade();
+      } else {
+        const { error } = await tx.from("cobrancas").insert(registro);
+        if (error) throw Object.assign(new Error(error.message), { code: error.code });
+      }
 
       const competencias = [
         ...new Set([
@@ -97,6 +116,7 @@ export async function POST(req: Request) {
       return sincronizarEspelho(tx, alunoId, hoje, competencias);
     });
   } catch (e) {
+    if (e instanceof ConflitoIdentidade || (e as { code?: string }).code === "23505") return erroAPI(new ConflitoIdentidade().message, 409);
     if (e instanceof ConflitoEspelho) return erroAPI(e.message, 409);
     const codigo = (e as { code?: string }).code;
     if (codigo === "23514") {

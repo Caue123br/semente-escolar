@@ -9,20 +9,19 @@ import {
   Legend,
 } from "recharts";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { formatBRL } from "@/lib/utils";
+import { formatBRL, formatDateLocalISO } from "@/lib/utils";
 import { useEntidade } from "@/lib/data/store";
 import { usePeriodoContexto } from "@/lib/contexto-periodo";
-import { somaRecebida } from "@/lib/financeiro-mensalidades";
+import { resumoFinanceiro } from "@/lib/financeiro-mensalidades";
 
 export function ComposicaoReceita() {
   const { periodo } = usePeriodoContexto();
   const { items: mensalidades } = useEntidade("mensalidades");
+  const { items: cobrancas } = useEntidade("cobrancas");
   const { items: vendas } = useEntidade("vendas");
 
-  // Recebido no mês pelo critério único de lib/financeiro-mensalidades.
-  const mensalidadesRecebidas = somaRecebida(
-    mensalidades.filter((m) => m.competencia === periodo.competencia)
-  );
+  const resumo = resumoFinanceiro(mensalidades, cobrancas, periodo.competencia, formatDateLocalISO());
+  const mensalidadesRecebidas = resumo.recebidoMensalidades;
 
   const vendasDoMes = vendas.filter((v) => v.data >= periodo.inicio && v.data <= periodo.fim);
 
@@ -34,6 +33,7 @@ export function ComposicaoReceita() {
 
   const dataChart = [
     { nome: "Mensalidades", valor: mensalidadesRecebidas, cor: "#3b82f6" },
+    { nome: "Matrículas", valor: resumo.recebidoMatriculas, cor: "#0891b2" },
     { nome: "Uniformes", valor: uniformes, cor: "#10b981" },
     { nome: "Alimentação extra", valor: alimentacao, cor: "#f59e0b" },
     { nome: "Eventos/festas", valor: eventos, cor: "#a855f7" },

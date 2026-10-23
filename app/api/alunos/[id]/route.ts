@@ -5,6 +5,7 @@ import { diffAudit, registrarAudit } from "@/lib/db/audit";
 import { erroAPI, erros } from "@/lib/db/api-response";
 import { limparCPF, validarCPF } from "@/lib/cpf";
 import { formatDateLocalISO } from "@/lib/utils";
+import { normalizarPessoasAutorizadas, PERIODOS_MATRICULA } from "@/lib/periodos-matricula";
 import {
   professorPodeAcessarAluno,
   professorPodeAcessarTurma,
@@ -21,6 +22,7 @@ const MAPA: Record<string, string> = {
   cpf: "cpf",
   rg: "rg",
   turmaId: "turma_id",
+  periodo: "periodo",
   bilingue: "bilingue",
   matricula: "matricula",
   dataMatricula: "data_matricula",
@@ -74,6 +76,10 @@ const CAMPOS_TEXTO: readonly string[] = [
 const STATUS_VALIDOS: readonly string[] = ["Ativo", "Inativo", "Trancado"];
 
 const OPCOES: Record<string, { lista: readonly string[]; mensagem: string }> = {
+  periodo: {
+    lista: PERIODOS_MATRICULA.map((periodo) => periodo.valor),
+    mensagem: "Escolha um período válido para a matrícula.",
+  },
   sexo: { lista: ["M", "F"], mensagem: "Escolha o sexo: masculino ou feminino." },
   matriculaModalidade: {
     lista: ["avista", "parcelado"],
@@ -490,10 +496,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
   }
   if (patch.pessoasAutorizadas !== undefined) {
-    if (!Array.isArray(patch.pessoasAutorizadas)) {
-      return erros.dadosInvalidos("pessoas autorizadas");
-    }
-    update.pessoas_autorizadas_json = patch.pessoasAutorizadas;
+    const autorizadas = normalizarPessoasAutorizadas(patch.pessoasAutorizadas);
+    if (!autorizadas.ok) return erroAPI(autorizadas.mensagem, 400);
+    update.pessoas_autorizadas_json = autorizadas.lista;
   }
   if (patch.fichaSaude !== undefined) {
     if (

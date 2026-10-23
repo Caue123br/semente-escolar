@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { objetoSimples, texto, textoOpcional } from "@/lib/api-input";
+import { podeGerenciarAlunos } from "@/lib/access-control";
+import { getUsuarioLogado } from "@/lib/db/auth";
 import { registrarAudit } from "@/lib/db/audit";
 import { erros, sucesso } from "@/lib/db/api-response";
 import { rowToBebe } from "@/lib/db/mappers";
@@ -13,6 +15,9 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const usuario = await getUsuarioLogado();
+  if (!usuario) return erros.naoAutenticado();
+  if (!podeGerenciarAlunos(usuario.perfil)) return erros.semPermissao("gerenciar bebês");
   const { id } = await params;
   const { data, error } = await getDatabase()
     .from("bercario_bebes")
@@ -30,6 +35,9 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const usuario = await getUsuarioLogado();
+  if (!usuario) return erros.naoAutenticado();
+  if (!podeGerenciarAlunos(usuario.perfil)) return erros.semPermissao("gerenciar bebês");
   const { id } = await params;
   let body: unknown;
   try {
@@ -60,6 +68,17 @@ export async function PATCH(
     const value = textoOpcional(body[campo]);
     if (value && value.length > 200) return erros.dadosInvalidos(campo);
     update[coluna] = value;
+  }
+  if (Object.hasOwn(body, "turmaId")) {
+    if (body.turmaId !== null && typeof body.turmaId !== "string") return erros.dadosInvalidos("turma");
+    const turmaId = texto(body.turmaId) || null;
+    if (turmaId && turmaId.length > 120) return erros.dadosInvalidos("turma");
+    if (turmaId) {
+      const { data: turma, error: erroTurma } = await getDatabase().from("turmas").select("id").eq("id", turmaId).maybeSingle();
+      if (erroTurma) return erros.servidorIndisponivel(erroTurma);
+      if (!turma) return erros.dadosInvalidos("turma não disponível nesta escola");
+    }
+    update.turma_id = turmaId;
   }
   if (Object.keys(update).length === 0) {
     return erros.dadosInvalidos("nenhum campo editável foi enviado");

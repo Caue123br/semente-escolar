@@ -24,6 +24,7 @@ import { useToast } from "@/lib/toast";
 import { usePerfil } from "@/lib/perfil-context";
 import { cn, formatDateBR, formatDateLocalISO, formatRelative } from "@/lib/utils";
 import { limparCPF, validarCPF, validarTelefone } from "@/lib/cpf";
+import { PERIODOS_MATRICULA, obterPeriodoMatricula, formatarPeriodoMatricula, type PeriodoMatricula } from "@/lib/periodos-matricula";
 import {
   ErroApi,
   apagarRascunhoMatricula,
@@ -108,6 +109,7 @@ interface AlunoForm {
   bairro: string;
   telefoneAluno: string;
   turmaId: string;
+  periodo: PeriodoMatricula | "";
   bilingue: boolean;
   religiao: string;
   escolaAnteriorNome: string;
@@ -196,6 +198,7 @@ function novoAlunoForm(turmaId: string): AlunoForm {
     bairro: "",
     telefoneAluno: "",
     turmaId,
+    periodo: "",
     bilingue: false,
     religiao: "",
     escolaAnteriorNome: "",
@@ -205,7 +208,7 @@ function novoAlunoForm(turmaId: string): AlunoForm {
 }
 
 function autorizadasVazias(): PessoaAutorizada[] {
-  return Array.from({ length: 5 }, () => ({ nome: "", parentesco: "" }));
+  return Array.from({ length: 5 }, () => ({ nome: "", parentesco: "", telefone: "" }));
 }
 
 function normalizarAutorizadas(lista: unknown): PessoaAutorizada[] {
@@ -213,7 +216,11 @@ function normalizarAutorizadas(lista: unknown): PessoaAutorizada[] {
   if (!Array.isArray(lista)) return base;
   lista.slice(0, 5).forEach((item, i) => {
     const p = (item ?? {}) as Partial<PessoaAutorizada>;
-    base[i] = { nome: String(p.nome ?? ""), parentesco: String(p.parentesco ?? "") };
+    base[i] = {
+      nome: String(p.nome ?? ""),
+      parentesco: String(p.parentesco ?? ""),
+      telefone: String(p.telefone ?? ""),
+    };
   });
   return base;
 }
@@ -280,7 +287,11 @@ function lerRascunho(dono: string): Rascunho | null {
       dono,
       chave: typeof r.chave === "string" ? r.chave : "",
       passo: passo >= 1 && passo <= 6 ? (passo as PassoNumero) : 1,
-      aluno: { ...novoAlunoForm(""), ...r.aluno },
+      aluno: {
+        ...novoAlunoForm(""),
+        ...r.aluno,
+        periodo: obterPeriodoMatricula(r.aluno.periodo)?.valor ?? "",
+      },
       pai: { ...novoResponsavel(), ...(r.pai ?? {}) },
       mae: { ...novoResponsavel(), ...(r.mae ?? {}) },
       autorizadas: normalizarAutorizadas(r.autorizadas),
@@ -344,6 +355,7 @@ interface FichaJaSalva {
   id: string;
   nome: string;
   dataNascimento: string;
+  periodo?: PeriodoMatricula;
 }
 
 function fichaJaSalvaDoPayload(payload: Record<string, unknown>): FichaJaSalva {
@@ -352,6 +364,7 @@ function fichaJaSalvaDoPayload(payload: Record<string, unknown>): FichaJaSalva {
     id: typeof item.id === "string" ? item.id : "",
     nome: typeof item.nome === "string" ? item.nome : "",
     dataNascimento: typeof item.dataNascimento === "string" ? item.dataNascimento : "",
+    periodo: obterPeriodoMatricula(item.periodo)?.valor,
   };
 }
 
@@ -400,9 +413,9 @@ export function NovaMatriculaModal({
       aluno.naturalDe, aluno.cep, aluno.endereco, aluno.bairro, aluno.telefoneAluno,
       aluno.religiao, aluno.escolaAnteriorNome, aluno.escolaAnteriorTempo,
     ].some((v) => v.trim() !== "");
-    if (preenchidoAluno || aluno.bilingue) return true;
+    if (preenchidoAluno || aluno.bilingue || aluno.periodo) return true;
     if (responsavelPreenchido(pai) || responsavelPreenchido(mae)) return true;
-    if (autorizadas.some((p) => p.nome.trim() || p.parentesco.trim())) return true;
+    if (autorizadas.some((p) => p.nome.trim() || p.parentesco.trim() || p.telefone?.trim())) return true;
     return fichaSaudePreenchida(saude);
   }, [aluno, pai, mae, autorizadas, saude]);
 
@@ -660,6 +673,7 @@ export function NovaMatriculaModal({
         }
 
         if (!aluno.turmaId) e.turmaId = "Escolha a turma da criança.";
+        if (!obterPeriodoMatricula(aluno.periodo)) e.periodo = "Escolha o período de permanência da criança.";
 
         const cpfDigitos = limparCPF(aluno.cpf);
         if (cpfDigitos && cpfDigitos.length !== 11) e.cpf = "O CPF tem 11 números. Complete ou deixe em branco.";
@@ -712,6 +726,11 @@ export function NovaMatriculaModal({
           }
           if (!p.nome.trim() && p.parentesco.trim()) {
             e[`autorizada-${i}`] = "Informe o nome completo dessa pessoa.";
+          }
+          if (p.telefone?.trim() && (!p.nome.trim() || !p.parentesco.trim())) {
+            e[`autorizada-${i}`] = "Informe também o nome e o parentesco dessa pessoa.";
+          } else if (p.telefone?.trim() && !validarTelefone(p.telefone)) {
+            e[`autorizada-${i}`] = "Telefone incompleto: informe DDD e número ou deixe em branco.";
           }
         });
       }
@@ -789,6 +808,7 @@ export function NovaMatriculaModal({
       cpf: limparCPF(aluno.cpf),
       rg: aluno.rg.trim() || undefined,
       turmaId: aluno.turmaId,
+      periodo: aluno.periodo || undefined,
       bilingue: aluno.bilingue,
       matricula: "",
       dataMatricula: aluno.dataMatricula || formatDateLocalISO(),
@@ -806,7 +826,11 @@ export function NovaMatriculaModal({
       religiao: aluno.religiao.trim() || undefined,
       escolaAnteriorNome: aluno.escolaAnteriorNome.trim() || undefined,
       escolaAnteriorTempo: aluno.escolaAnteriorTempo.trim() || undefined,
-      pessoasAutorizadas: autorizadas.filter((p) => p.nome.trim()),
+      pessoasAutorizadas: autorizadas.filter((p) => p.nome.trim()).map((p) => ({
+        nome: p.nome.trim(),
+        parentesco: p.parentesco.trim(),
+        telefone: p.telefone?.trim() || undefined,
+      })),
       fichaSaude: saude,
     };
   };
@@ -1014,6 +1038,9 @@ export function NovaMatriculaModal({
               <PassoConclusao
                 nome={aluno.nome}
                 turmaNome={turmaSelecionada?.nome}
+                professoraNome={turmaSelecionada?.professorNome?.trim()}
+                periodo={aluno.periodo}
+                autorizadas={autorizadas}
                 pai={pai}
                 mae={mae}
                 paiPreenchido={paiPreenchido}
@@ -1144,6 +1171,8 @@ function PassoAluno({
   cepStatus: CepStatus;
   onCepChange: (v: string) => void;
 }) {
+  const turmaSelecionada = turmas.find((turma) => turma.id === dados.turmaId);
+
   return (
     <div className="space-y-4">
       <h3 className="font-semibold text-base flex items-center gap-2">
@@ -1191,13 +1220,15 @@ function PassoAluno({
           <Input className="mt-1.5" value={dados.ra} onChange={(e) => atualizar("ra", e.target.value)} placeholder="Registro acadêmico" />
         </div>
         <div>
-          <Label>CPF</Label>
+          <Label>CPF (opcional)</Label>
           <InputCPF className="mt-1.5" value={dados.cpf} onChange={(v) => atualizar("cpf", v)} />
+          <p className="mt-1 text-xs text-muted-foreground">Pode matricular sem o CPF da criança.</p>
           <ErroCampo msg={erros.cpf} />
         </div>
         <div>
-          <Label>RG</Label>
+          <Label>RG (opcional)</Label>
           <Input className="mt-1.5" value={dados.rg} onChange={(e) => atualizar("rg", e.target.value)} />
+          <p className="mt-1 text-xs text-muted-foreground">Preencha se a criança já tiver RG.</p>
         </div>
       </div>
 
@@ -1256,8 +1287,10 @@ function PassoAluno({
           <Input className="mt-1.5" value={dados.bairro} onChange={(e) => atualizar("bairro", e.target.value)} />
         </div>
         <div>
-          <Label>Turma *</Label>
+          <Label htmlFor="matricula-turma">Sala / turma *</Label>
           <select
+            id="matricula-turma"
+            aria-describedby="matricula-turma-hint"
             value={dados.turmaId}
             onChange={(e) => atualizar("turmaId", e.target.value)}
             disabled={turmas.length === 0}
@@ -1268,13 +1301,40 @@ function PassoAluno({
           >
             {turmas.length === 0 && <option value="">Nenhuma turma cadastrada</option>}
             {turmas.map((t) => (
-              <option key={t.id} value={t.id}>{t.nome} ({t.turno})</option>
+              <option key={t.id} value={t.id}>{t.nome} ({t.turno}) — {t.professorNome?.trim() || "Professora não vinculada"}</option>
             ))}
           </select>
           <ErroCampo msg={erros.turmaId} />
+          {turmaSelecionada && (
+            <p id="matricula-turma-hint" className={`mt-1 text-xs ${turmaSelecionada.professorNome?.trim() ? "text-muted-foreground" : "text-amber-700"}`}>
+              {turmaSelecionada.professorNome?.trim()
+                ? `Professora responsável: ${turmaSelecionada.professorNome.trim()}. A professora acompanha a sala escolhida.`
+                : "Professora não vinculada. A matrícula pode continuar; informe a professora no cadastro da sala / turma."}
+            </p>
+          )}
           {turmas.length === 0 && (
             <p className="mt-1 text-xs text-amber-700">Crie uma turma antes de concluir a matrícula.</p>
           )}
+        </div>
+        <div>
+          <Label htmlFor="matricula-periodo">Período *</Label>
+          <select
+            id="matricula-periodo"
+            required
+            value={dados.periodo}
+            onChange={(e) => atualizar("periodo", e.target.value as PeriodoMatricula | "")}
+            className={cn(
+              "mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm",
+              bordaErro(erros.periodo)
+            )}
+          >
+            <option value="">Escolha o período</option>
+            {PERIODOS_MATRICULA.map((periodo) => (
+              <option key={periodo.valor} value={periodo.valor}>{periodo.nome} — {periodo.horario}</option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-muted-foreground">Escolha o horário contratado para este aluno.</p>
+          <ErroCampo msg={erros.periodo} />
         </div>
         <div>
           <Label>Religião</Label>
@@ -1467,20 +1527,33 @@ function PassoAutorizadas({
               <div className="md:col-span-1 text-xs text-muted-foreground font-mono text-center">
                 {String(i + 1).padStart(2, "0")}
               </div>
-              <div className="md:col-span-7">
+              <div className="md:col-span-4">
+                <Label className="text-xs" htmlFor={`matricula-autorizada-nome-${i}`}>Nome completo</Label>
                 <Input
+                  id={`matricula-autorizada-nome-${i}`}
                   placeholder="Nome completo"
                   className={bordaErro(erro)}
                   value={p.nome}
                   onChange={(e) => upd(i, "nome", e.target.value)}
                 />
               </div>
-              <div className="md:col-span-4">
+              <div className="md:col-span-3">
+                <Label className="text-xs" htmlFor={`matricula-autorizada-parentesco-${i}`}>Parentesco</Label>
                 <Input
+                  id={`matricula-autorizada-parentesco-${i}`}
                   placeholder="Parentesco (avó, tio, etc)"
                   className={bordaErro(erro)}
                   value={p.parentesco}
                   onChange={(e) => upd(i, "parentesco", e.target.value)}
+                />
+              </div>
+              <div className="md:col-span-4">
+                <Label className="text-xs" htmlFor={`matricula-autorizada-telefone-${i}`}>Telefone (opcional)</Label>
+                <InputTelefone
+                  id={`matricula-autorizada-telefone-${i}`}
+                  value={p.telefone ?? ""}
+                  onChange={(v) => upd(i, "telefone", v)}
+                  className={bordaErro(erro)}
                 />
               </div>
               {erro && <div className="md:col-span-12 md:pl-[8.333%]"><ErroCampo msg={erro} /></div>}
@@ -1683,6 +1756,9 @@ function SimNaoMotivo({
 function PassoConclusao({
   nome,
   turmaNome,
+  professoraNome,
+  periodo,
+  autorizadas,
   pai,
   mae,
   paiPreenchido,
@@ -1695,6 +1771,9 @@ function PassoConclusao({
 }: {
   nome: string;
   turmaNome?: string;
+  professoraNome?: string;
+  periodo: PeriodoMatricula | "";
+  autorizadas: PessoaAutorizada[];
   pai: ResponsavelForm;
   mae: ResponsavelForm;
   paiPreenchido: boolean;
@@ -1726,8 +1805,16 @@ function PassoConclusao({
           <span className="font-semibold">{nome.trim() || "—"}</span>
         </div>
         <div className="p-3 flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">Turma</span>
+          <span className="text-sm text-muted-foreground">Sala / turma</span>
           <span className="font-semibold">{turmaNome ?? "—"}</span>
+        </div>
+        <div className="p-3 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-sm text-muted-foreground">Professora responsável</span>
+          <span className={`font-semibold ${!professoraNome ? "text-amber-700" : ""}`}>{professoraNome || "Professora não vinculada"}</span>
+        </div>
+        <div className="p-3 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-sm text-muted-foreground">Período e horário</span>
+          <span className="font-semibold">{formatarPeriodoMatricula(periodo) || "—"}</span>
         </div>
         <div className="p-3 flex items-center justify-between">
           <span className="text-sm text-muted-foreground">Pai</span>
@@ -1741,6 +1828,18 @@ function PassoConclusao({
           <span className="text-sm text-muted-foreground">Responsável financeiro</span>
           <span className="font-semibold">{financeiro?.nome.trim() || "—"}</span>
         </div>
+        {autorizadas.some((pessoa) => pessoa.nome.trim()) && (
+          <div className="p-3 space-y-2">
+            <div className="text-sm text-muted-foreground">Pessoas autorizadas a buscar</div>
+            {autorizadas.filter((pessoa) => pessoa.nome.trim()).map((pessoa, i) => (
+              <div key={i} className="text-sm">
+                <span className="font-semibold">{pessoa.nome.trim()}</span>
+                {" · "}{pessoa.parentesco.trim()}
+                {pessoa.telefone?.trim() ? ` · ${pessoa.telefone.trim()}` : " · telefone não informado"}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="max-w-xs">
@@ -1815,6 +1914,9 @@ function DialogoFichaJaSalva({
                 <div className="text-xs text-muted-foreground">
                   nascida(o) em {formatDateBR(ficha.dataNascimento)}
                 </div>
+              )}
+              {ficha.periodo && (
+                <div className="text-xs text-muted-foreground">{formatarPeriodoMatricula(ficha.periodo)}</div>
               )}
             </div>
           </div>
