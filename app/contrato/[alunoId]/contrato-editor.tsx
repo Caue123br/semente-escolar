@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CONTRATOS, type PeriodoContrato } from "@/lib/contrato-modelo";
 import { obterPeriodoMatricula } from "@/lib/periodos-matricula";
+import { formatarEnderecoResidencial } from "@/lib/endereco-residencial";
 import { formatBRL, formatDateBR } from "@/lib/utils";
 import type { Aluno } from "@/lib/types";
 
@@ -135,7 +136,7 @@ export function ContratoEditor({ aluno, turma, plano, cobrado }: Props) {
       MAE_NAC: mae ? "Brasileira" : "",
       MAE_RG: mae?.rg ?? "",
       MAE_CPF: mae?.cpf ?? "",
-      ENDERECO: aluno.endereco ?? "",
+      ENDERECO: formatarEnderecoResidencial(aluno),
       BAIRRO: aluno.bairro ?? "",
       CIDADE: "Taubaté",
       CEP: aluno.cep ?? "",

@@ -27,6 +27,7 @@ import { EditarAlunoModal } from "@/components/alunos/editar-aluno-modal";
 import { formatDateBR, formatBRL } from "@/lib/utils";
 import { formatarPeriodoMatricula } from "@/lib/periodos-matricula";
 import { formatarTelefone } from "@/lib/cpf";
+import { formatarEnderecoResidencial } from "@/lib/endereco-residencial";
 import type { FichaSaude } from "@/lib/types";
 
 export default function AlunoDetalhePage() {
@@ -283,6 +284,7 @@ export default function AlunoDetalhePage() {
                 <Field label="Data de nascimento" value={formatDateBR(aluno.dataNascimento)} />
                 <Field label="CPF" value={aluno.cpf || "—"} />
                 <Field label="RG" value={aluno.rg ?? "—"} />
+                <Field label="Endereço" value={formatarEnderecoResidencial(aluno) || "Não informado"} />
                 <Field label="Turma" value={turma?.nome ?? "—"} />
                 <Field label="Turno da turma" value={turma?.turno ?? "—"} />
                 <Field label="Período e horário do aluno" value={formatarPeriodoMatricula(aluno.periodo) || "Não informado"} />

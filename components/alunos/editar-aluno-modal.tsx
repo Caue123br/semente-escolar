@@ -86,6 +86,7 @@ export function EditarAlunoModal({ aberto, aluno, turmas, onClose, onSalvar }: P
   const [estado, setEstado] = React.useState("");
   const [cep, setCep] = React.useState("");
   const [endereco, setEndereco] = React.useState("");
+  const [numeroResidencia, setNumeroResidencia] = React.useState("");
   const [bairro, setBairro] = React.useState("");
   const [telefoneAluno, setTelefoneAluno] = React.useState("");
   const [religiao, setReligiao] = React.useState("");
@@ -119,6 +120,7 @@ export function EditarAlunoModal({ aberto, aluno, turmas, onClose, onSalvar }: P
     setEstado(aluno.estado ?? "");
     setCep(aluno.cep ?? "");
     setEndereco(aluno.endereco ?? "");
+    setNumeroResidencia(aluno.numeroResidencia ?? "");
     setBairro(aluno.bairro ?? "");
     setTelefoneAluno(aluno.telefoneAluno ?? "");
     setReligiao(aluno.religiao ?? "");
@@ -294,6 +296,7 @@ export function EditarAlunoModal({ aberto, aluno, turmas, onClose, onSalvar }: P
         estado: limpo(estado),
         cep: limpo(cep),
         endereco: limpo(endereco),
+        numeroResidencia: limpo(numeroResidencia),
         bairro: limpo(bairro),
         telefoneAluno: limpo(telefoneAluno),
         religiao: limpo(religiao),
@@ -486,7 +489,8 @@ export function EditarAlunoModal({ aberto, aluno, turmas, onClose, onSalvar }: P
                   <p className="text-xs text-amber-700">{cepStatus.detalhe}</p>
                 )}
               </div>
-              <Campo label="Endereço" value={endereco} onChange={setEndereco} className="sm:col-span-2" />
+              <Campo label="Endereço" value={endereco} onChange={setEndereco} placeholder="Rua ou avenida" className="sm:col-span-2" />
+              <Campo label="Número da residência" value={numeroResidencia} onChange={setNumeroResidencia} placeholder="Ex.: 123 ou S/N" maxLength={30} />
               <Campo label="Bairro" value={bairro} onChange={setBairro} />
             </div>
           </section>
@@ -733,17 +737,21 @@ function Campo({
   value,
   onChange,
   className,
+  placeholder,
+  maxLength,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   className?: string;
+  placeholder?: string;
+  maxLength?: number;
 }) {
   const id = React.useId();
   return (
     <div className={`space-y-1.5 ${className ?? ""}`}>
       <Label htmlFor={id}>{label}</Label>
-      <Input id={id} value={value} onChange={(e) => onChange(e.target.value)} />
+      <Input id={id} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} maxLength={maxLength} />
     </div>
   );
 }

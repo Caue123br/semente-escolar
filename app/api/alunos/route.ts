@@ -169,6 +169,7 @@ const CAMPOS_DA_FICHA: readonly (keyof Aluno)[] = [
   "estado",
   "cep",
   "endereco",
+  "numeroResidencia",
   "bairro",
   "telefoneAluno",
   "religiao",
@@ -381,6 +382,15 @@ export async function POST(req: Request) {
     return erros.dadosInvalidos("corpo da requisição");
   }
 
+  const numeroRecebido: unknown = a.numeroResidencia;
+  if (numeroRecebido != null && typeof numeroRecebido !== "string") {
+    return erros.dadosInvalidos("número da residência");
+  }
+  const numeroResidencia = typeof numeroRecebido === "string" ? numeroRecebido.trim() : "";
+  if (numeroResidencia.length > 30) {
+    return erroAPI("O número da residência deve ter até 30 caracteres.", 400);
+  }
+
   const nome = typeof a?.nome === "string" ? a.nome.trim() : "";
   const dataNascimento = typeof a?.dataNascimento === "string" ? a.dataNascimento : "";
   const turmaId = typeof a?.turmaId === "string" ? a.turmaId.trim() : "";
@@ -389,7 +399,7 @@ export async function POST(req: Request) {
   const periodo = obterPeriodoMatricula(periodoRecebido);
   const hoje = formatDateLocalISO();
 
-  // Antes de qualquer validação: chave já usada não cria nada, então o corpo do
+  // Antes das demais validações: chave já usada não cria nada, então o corpo do
   // retry não precisa passar pelas regras de novo. Recusar aqui devolveria a
   // secretaria ao formulário sem dizer que a ficha já está salva.
   const chave = (req.headers.get("Idempotency-Key") ?? "").trim();
@@ -560,6 +570,7 @@ export async function POST(req: Request) {
     estado: a.estado || null,
     cep: a.cep || null,
     endereco: a.endereco || null,
+    numero_residencia: numeroResidencia || null,
     bairro: a.bairro || null,
     telefone_aluno: a.telefoneAluno || null,
     religiao: a.religiao || null,

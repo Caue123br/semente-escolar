@@ -117,6 +117,7 @@ export interface Aluno {
   estado?: string;
   cep?: string;
   endereco?: string;
+  numeroResidencia?: string;
   bairro?: string;
   telefoneAluno?: string;
   religiao?: string;

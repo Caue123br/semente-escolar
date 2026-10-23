@@ -9,7 +9,7 @@ const React = require("react");
 const ts = require("typescript");
 
 // Executa o componente real; substitui apenas o runtime de hooks e as dependências de apresentação.
-function sessao(alteracoes = {}, perfil = "diretor") {
+function sessao(alteracoes = {}, perfil = "diretor", respostaCep) {
   const estados = [], refs = [], dependencias = [];
   let indiceEstado = 0, indiceRef = 0, indiceEfeito = 0, efeitos = [];
   const react = {
@@ -41,6 +41,7 @@ function sessao(alteracoes = {}, perfil = "diretor") {
     }).outputText;
     vm.runInNewContext(codigo, {
       exports,
+      fetch: async () => ({ ok: true, json: async () => respostaCep }),
       require(id) {
         if (id === "react") return react;
         if (id === "react/jsx-runtime" || id === "lucide-react") return require(id);
@@ -81,7 +82,7 @@ function sessao(alteracoes = {}, perfil = "diretor") {
     return arvore;
   };
   renderizar();
-  return { renderizar, salvos, avisos, aluno };
+  return { renderizar, salvos, avisos, aluno, props };
 }
 
 function encontrar(arvore, predicado) {
@@ -256,4 +257,55 @@ test("eleição financeira explícita mantém campos legados e move os dois indi
     { nome: "Primeiro Responsável", parentesco: "Mãe", telefone: "12988888888", principal: false, responsavelFinanceiro: false, localTrabalho: "Trabalho anterior" },
     { nome: "Segundo Responsável", parentesco: "Pai", telefone: "12977777777", principal: true, responsavelFinanceiro: true, profissao: "Profissão anterior" },
   ]);
+});
+
+
+// Sem estado/carregamento/payload de número, este fluxo perde ou deixa de limpar o valor persistido.
+test("número da residência carrega, aceita sufixo ou S/N e chega separado ao JSON do PATCH", async () => {
+  for (const numero of ["123", "123A", "S/N"]) {
+    const s = sessao({ numeroResidencia: "45", endereco: "Rua antiga, 45" });
+    const controle = campo(s.renderizar(), "Número da residência");
+    assert.equal(controle.props.value, "45");
+    const elemento = controle.type(controle.props);
+    const label = encontrar(elemento, (e) => e.type === "label");
+    const input = encontrar(elemento, (e) => e.type === "input");
+    assert.equal(label.props.htmlFor, input.props.id);
+    assert.equal(input.props.placeholder, "Ex.: 123 ou S/N");
+    assert.equal(input.props.maxLength, 30);
+    input.props.onChange({ target: { value: ` ${numero} ` } });
+    const patch = await salvar(s);
+    assert.equal(patch.numeroResidencia, numero);
+    assert.equal(patch.endereco, "Rua antiga, 45");
+    assert.equal(Object.hasOwn(patch, "responsaveis"), false);
+  }
+});
+
+test("apagar o número envia string vazia explícita e reabrir recarrega o dado salvo", async () => {
+  const s = sessao({ numeroResidencia: "123A" });
+  campo(s.renderizar(), "Número da residência").props.onChange("  ");
+  assert.equal((await salvar(s)).numeroResidencia, "");
+  s.props.aberto = false;
+  s.renderizar();
+  s.props.aberto = true;
+  s.renderizar();
+  assert.equal(campo(s.renderizar(), "Número da residência").props.value, "123A");
+});
+
+test("CEP preenche logradouro e bairro preservando número já digitado na edição", async () => {
+  const s = sessao({ numeroResidencia: "S/N" }, "diretor", { ok: true, endereco: "Rua do CEP", bairro: "Centro" });
+  const cep = encontrar(s.renderizar(), (e) => e.type === "InputCEP");
+  cep.props.onChange("12000-001");
+  await new Promise(setImmediate);
+  const patch = await salvar(s);
+  assert.equal(patch.numeroResidencia, "S/N");
+  assert.equal(patch.endereco, "Rua do CEP");
+  assert.equal(patch.bairro, "Centro");
+});
+
+test("cadastro legado mantém endereço e não infere número da residência", async () => {
+  const s = sessao({ numeroResidencia: undefined, endereco: "Rua Legada, 987" });
+  assert.equal(campo(s.renderizar(), "Número da residência").props.value, "");
+  const patch = await salvar(s);
+  assert.equal(patch.endereco, "Rua Legada, 987");
+  assert.equal(patch.numeroResidencia, "");
 });

@@ -37,6 +37,7 @@ const MAPA: Record<string, string> = {
   estado: "estado",
   cep: "cep",
   endereco: "endereco",
+  numeroResidencia: "numero_residencia",
   bairro: "bairro",
   telefoneAluno: "telefone_aluno",
   religiao: "religiao",
@@ -415,6 +416,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         return erroAPI("Escolha a situação do aluno: Ativo, Inativo ou Trancado.", 400);
       }
       update.status = valor;
+      continue;
+    }
+    if (campo === "numeroResidencia") {
+      if (valor !== null && typeof valor !== "string") {
+        return erros.dadosInvalidos("número da residência");
+      }
+      const numeroResidencia = textoOuNulo(valor);
+      if (numeroResidencia !== null && numeroResidencia.length > 30) {
+        return erroAPI("O número da residência deve ter até 30 caracteres.", 400);
+      }
+      update[coluna] = numeroResidencia;
       continue;
     }
     const opcoes = OPCOES[campo];

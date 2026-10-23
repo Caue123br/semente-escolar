@@ -5,6 +5,7 @@ import { rowToAluno } from "@/lib/db/mappers";
 import { formatDateBR } from "@/lib/utils";
 import { formatarPeriodoMatricula } from "@/lib/periodos-matricula";
 import { formatarTelefone } from "@/lib/cpf";
+import { formatarEnderecoResidencial } from "@/lib/endereco-residencial";
 import { FichaImprimir } from "./ficha-imprimir";
 
 export const runtime = "nodejs";
@@ -99,7 +100,7 @@ export default async function FichaPage({ params }: PageProps) {
             <span className="text-gray-700 text-xs whitespace-nowrap">Período:</span>
             <span>{periodo}</span>
           </div>
-          <Linha label="Endereço" value={aluno.endereco} secLabel="Fone" secValue={aluno.telefoneAluno} />
+          <Linha label="Endereço" value={formatarEnderecoResidencial(aluno)} secLabel="Fone" secValue={aluno.telefoneAluno} />
           <Linha label="Bairro" value={aluno.bairro} secLabel="CEP" secValue={aluno.cep} />
         </section>
 

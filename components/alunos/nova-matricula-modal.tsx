@@ -24,6 +24,7 @@ import { useToast } from "@/lib/toast";
 import { usePerfil } from "@/lib/perfil-context";
 import { cn, formatDateBR, formatDateLocalISO, formatRelative } from "@/lib/utils";
 import { limparCPF, validarCPF, validarTelefone } from "@/lib/cpf";
+import { formatarEnderecoResidencial } from "@/lib/endereco-residencial";
 import { PERIODOS_MATRICULA, obterPeriodoMatricula, formatarPeriodoMatricula, type PeriodoMatricula } from "@/lib/periodos-matricula";
 import {
   ErroApi,
@@ -106,6 +107,7 @@ interface AlunoForm {
   estado: string;
   cep: string;
   endereco: string;
+  numeroResidencia: string;
   bairro: string;
   telefoneAluno: string;
   turmaId: string;
@@ -195,6 +197,7 @@ function novoAlunoForm(turmaId: string): AlunoForm {
     estado: "SP",
     cep: "",
     endereco: "",
+    numeroResidencia: "",
     bairro: "",
     telefoneAluno: "",
     turmaId,
@@ -410,7 +413,7 @@ export function NovaMatriculaModal({
   const temDados = React.useMemo(() => {
     const preenchidoAluno = [
       aluno.nome, aluno.dataNascimento, aluno.sexo, aluno.cpf, aluno.rg, aluno.ra, aluno.raca,
-      aluno.naturalDe, aluno.cep, aluno.endereco, aluno.bairro, aluno.telefoneAluno,
+      aluno.naturalDe, aluno.cep, aluno.endereco, aluno.numeroResidencia, aluno.bairro, aluno.telefoneAluno,
       aluno.religiao, aluno.escolaAnteriorNome, aluno.escolaAnteriorTempo,
     ].some((v) => v.trim() !== "");
     if (preenchidoAluno || aluno.bilingue || aluno.periodo) return true;
@@ -764,7 +767,7 @@ export function NovaMatriculaModal({
     // Financeiro explícito quando há dois responsáveis; automático quando há um só.
     const financeiroEhPai = pai.responsavelFinanceiro || (paiPreenchido && !maePreenchida);
     const financeiroEhMae = !financeiroEhPai && maePreenchida;
-    const enderecoFamilia = [aluno.endereco.trim(), aluno.bairro.trim()].filter(Boolean).join(", ");
+    const enderecoFamilia = [formatarEnderecoResidencial(aluno), aluno.bairro.trim()].filter(Boolean).join(", ");
     const responsaveis: Responsavel[] = [];
 
     if (paiPreenchido) {
@@ -821,6 +824,7 @@ export function NovaMatriculaModal({
       estado: aluno.estado.trim() || undefined,
       cep: aluno.cep.trim() || undefined,
       endereco: aluno.endereco.trim() || undefined,
+      numeroResidencia: aluno.numeroResidencia.trim(),
       bairro: aluno.bairro.trim() || undefined,
       telefoneAluno: aluno.telefoneAluno.trim() || undefined,
       religiao: aluno.religiao.trim() || undefined,
@@ -1037,6 +1041,7 @@ export function NovaMatriculaModal({
             {passo === 6 && (
               <PassoConclusao
                 nome={aluno.nome}
+                endereco={formatarEnderecoResidencial(aluno)}
                 turmaNome={turmaSelecionada?.nome}
                 professoraNome={turmaSelecionada?.professorNome?.trim()}
                 periodo={aluno.periodo}
@@ -1271,17 +1276,21 @@ function PassoAluno({
           )}
         </div>
         <div className="md:col-span-2">
-          <Label>Endereço</Label>
-          <Input className="mt-1.5" value={dados.endereco} onChange={(e) => atualizar("endereco", e.target.value)} placeholder="Rua, número" />
+          <Label htmlFor="matricula-endereco">Endereço</Label>
+          <Input id="matricula-endereco" className="mt-1.5" value={dados.endereco} onChange={(e) => atualizar("endereco", e.target.value)} placeholder="Rua ou avenida" />
         </div>
+        <div>
+          <Label htmlFor="matricula-numero-residencia">Número da residência</Label>
+          <Input id="matricula-numero-residencia" className="mt-1.5" value={dados.numeroResidencia} onChange={(e) => atualizar("numeroResidencia", e.target.value)} placeholder="Ex.: 123 ou S/N" maxLength={30} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
           <Label>Telefone</Label>
           <InputTelefone className={cn("mt-1.5", bordaErro(erros.telefoneAluno))} value={dados.telefoneAluno} onChange={(v) => atualizar("telefoneAluno", v)} />
           <ErroCampo msg={erros.telefoneAluno} />
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
           <Label>Bairro</Label>
           <Input className="mt-1.5" value={dados.bairro} onChange={(e) => atualizar("bairro", e.target.value)} />
@@ -1755,6 +1764,7 @@ function SimNaoMotivo({
 // ===== ETAPA 6: CONCLUSÃO =====
 function PassoConclusao({
   nome,
+  endereco,
   turmaNome,
   professoraNome,
   periodo,
@@ -1770,6 +1780,7 @@ function PassoConclusao({
   erros,
 }: {
   nome: string;
+  endereco: string;
   turmaNome?: string;
   professoraNome?: string;
   periodo: PeriodoMatricula | "";
@@ -1803,6 +1814,10 @@ function PassoConclusao({
         <div className="p-3 flex items-center justify-between">
           <span className="text-sm text-muted-foreground">Aluno</span>
           <span className="font-semibold">{nome.trim() || "—"}</span>
+        </div>
+        <div className="p-3 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-sm text-muted-foreground">Endereço</span>
+          <span className="font-semibold">{endereco || "—"}</span>
         </div>
         <div className="p-3 flex items-center justify-between">
           <span className="text-sm text-muted-foreground">Sala / turma</span>

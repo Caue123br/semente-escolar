@@ -56,6 +56,7 @@ export function rowToAluno(r: Row): Aluno {
     estado: r.estado ? str(r.estado) : undefined,
     cep: r.cep ? str(r.cep) : undefined,
     endereco: r.endereco ? str(r.endereco) : undefined,
+    numeroResidencia: r.numero_residencia ? str(r.numero_residencia) : undefined,
     bairro: r.bairro ? str(r.bairro) : undefined,
     telefoneAluno: r.telefone_aluno ? str(r.telefone_aluno) : undefined,
     religiao: r.religiao ? str(r.religiao) : undefined,
