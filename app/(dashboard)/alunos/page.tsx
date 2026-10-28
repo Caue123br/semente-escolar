@@ -39,6 +39,7 @@ import type { Aluno, Turma } from "@/lib/types";
 import { NovaTurmaModal } from "@/components/alunos/nova-turma-modal";
 import { GerenciarTurmasModal } from "@/components/alunos/gerenciar-turmas-modal";
 import { TrocarSalaModal } from "@/components/alunos/trocar-sala-modal";
+import { MoverAlunosEmMassa } from "@/components/alunos/mover-alunos-em-massa";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { filtrarAlunos, listarProfessorasTurmas, normalizarBuscaAlunos, temAlertaSaude, type OpcaoProfessora } from "@/lib/filtros-alunos";
 
@@ -62,6 +63,7 @@ export default function AlunosPage() {
   const [pagina, setPagina] = React.useState(1);
   const [fotoNovoAluno, setFotoNovoAluno] = React.useState<Aluno | null>(null);
   const [trocandoSala, setTrocandoSala] = React.useState<Aluno | null>(null);
+  const [selecionados, setSelecionados] = React.useState<ReadonlySet<string>>(new Set());
   const toast = useToast();
 
   const {
@@ -173,12 +175,28 @@ export default function AlunosPage() {
     { key: "nome", direction: "asc" }
   );
 
+  // Seleção só vale para quem está na lista filtrada atual (todas as páginas).
+  const selecionadosNaLista = ordenados.filter((a) => selecionados.has(a.id)).map((a) => a.id);
+  const todosSelecionados = ordenados.length > 0 && ordenados.every((a) => selecionados.has(a.id));
+  const alternarSelecionado = (id: string) => {
+    setSelecionados((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(id)) novo.delete(id);
+      else novo.add(id);
+      return novo;
+    });
+  };
+  const alternarTodos = () => {
+    setSelecionados(todosSelecionados ? new Set() : new Set(ordenados.map((a) => a.id)));
+  };
+
   const totalPaginas = Math.max(1, Math.ceil(ordenados.length / ALUNOS_POR_PAGINA));
   const visiveis = ordenados.slice((pagina - 1) * ALUNOS_POR_PAGINA, pagina * ALUNOS_POR_PAGINA);
 
   // Mudou filtro/busca: volta pra primeira página. Encolheu a lista: não fica em página vazia.
   React.useEffect(() => {
     setPagina(1);
+    setSelecionados(new Set());
   }, [busca, turmaFiltro, professoraFiltro, bilinguismo, comAlergia]);
   React.useEffect(() => {
     if (pagina > totalPaginas) setPagina(totalPaginas);
@@ -467,7 +485,7 @@ export default function AlunosPage() {
             </CardHeader>
             <CardContent className="px-0 overflow-x-auto">
               {carregando && filtrados.length === 0 && (
-                <SkeletonTableRows rows={6} cols={podeGerenciar ? 8 : 7} />
+                <SkeletonTableRows rows={6} cols={podeGerenciar ? 9 : 7} />
               )}
               {!carregando && filtrados.length === 0 && (
                 <div className="p-8 text-center text-sm text-muted-foreground">
@@ -482,6 +500,17 @@ export default function AlunosPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {podeGerenciar && (
+                      <TableHead className="w-10">
+                        <input
+                          type="checkbox"
+                          aria-label="Selecionar todos os alunos filtrados"
+                          className="rounded"
+                          checked={todosSelecionados}
+                          onChange={alternarTodos}
+                        />
+                      </TableHead>
+                    )}
                     <SortHeader active={sort.key === "nome"} direction={sort.direction} onClick={() => toggle("nome")}>Aluno</SortHeader>
                     <SortHeader active={sort.key === "matricula"} direction={sort.direction} onClick={() => toggle("matricula")}>Matrícula</SortHeader>
                     <SortHeader active={sort.key === "turma"} direction={sort.direction} onClick={() => toggle("turma")}>Sala/Turma</SortHeader>
@@ -498,6 +527,17 @@ export default function AlunosPage() {
                     const resp = a.responsaveis.find((r) => r.principal) ?? a.responsaveis[0];
                     return (
                       <TableRow key={a.id}>
+                        {podeGerenciar && (
+                          <TableCell className="w-10">
+                            <input
+                              type="checkbox"
+                              aria-label={`Selecionar ${a.nome}`}
+                              className="rounded"
+                              checked={selecionados.has(a.id)}
+                              onChange={() => alternarSelecionado(a.id)}
+                            />
+                          </TableCell>
+                        )}
                         <TableCell>
                           <Link
                             href={podeGerenciar ? `/alunos/${a.id}` : `/pedagogico/${a.id}`}
@@ -777,6 +817,15 @@ export default function AlunosPage() {
           </Card>
         </TabsContent>}
       </Tabs>
+
+      {podeGerenciar && (
+        <MoverAlunosEmMassa
+          selecionados={selecionadosNaLista}
+          turmas={turmas}
+          ocupacaoPorTurma={ocupacaoPorTurma}
+          onLimpar={() => setSelecionados(new Set())}
+        />
+      )}
 
       <ConfirmDialog
         aberto={!!confirmarExcluir}
