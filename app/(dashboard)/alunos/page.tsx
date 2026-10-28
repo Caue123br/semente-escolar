@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { AlertCircle, Users, Plus, Search, Filter, Download, UserPlus, Cake, Heart } from "lucide-react";
+import { AlertCircle, Users, Plus, Search, Filter, Download, UserPlus, Cake, Heart, Pencil } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +38,7 @@ import { UploadFotoAluno } from "@/components/alunos/upload-foto";
 import type { Aluno, Turma } from "@/lib/types";
 import { NovaTurmaModal } from "@/components/alunos/nova-turma-modal";
 import { GerenciarTurmasModal } from "@/components/alunos/gerenciar-turmas-modal";
+import { TrocarSalaModal } from "@/components/alunos/trocar-sala-modal";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { filtrarAlunos, listarProfessorasTurmas, normalizarBuscaAlunos, temAlertaSaude, type OpcaoProfessora } from "@/lib/filtros-alunos";
 
@@ -60,6 +61,7 @@ export default function AlunosPage() {
   const [editando, setEditando] = React.useState<Aluno | null>(null);
   const [pagina, setPagina] = React.useState(1);
   const [fotoNovoAluno, setFotoNovoAluno] = React.useState<Aluno | null>(null);
+  const [trocandoSala, setTrocandoSala] = React.useState<Aluno | null>(null);
   const toast = useToast();
 
   const {
@@ -127,6 +129,14 @@ export default function AlunosPage() {
   };
 
   const turmasMap = React.useMemo(() => new Map(turmas.map((t) => [t.id, t])), [turmas]);
+  const ocupacaoPorTurma = React.useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const aluno of alunos) {
+      if (aluno.status !== "Ativo") continue;
+      mapa.set(aluno.turmaId, (mapa.get(aluno.turmaId) ?? 0) + 1);
+    }
+    return mapa;
+  }, [alunos]);
   const professoras = React.useMemo(() => listarProfessorasTurmas(turmas), [turmas]);
   const filtrados = filtrarAlunos(alunos, turmas, {
     busca, turmaFiltro, professoraFiltro, bilinguismo, comAlergia: podeGerenciar && comAlergia,
@@ -308,6 +318,16 @@ export default function AlunosPage() {
         onClose={() => setEditando(null)}
         onSalvar={update}
       />
+      {podeGerenciar && (
+        <TrocarSalaModal
+          aluno={trocandoSala}
+          turmas={turmas}
+          ocupacaoPorTurma={ocupacaoPorTurma}
+          onClose={() => setTrocandoSala(null)}
+          onSalvar={update}
+          onGerenciarTurmas={() => setModalGerenciarTurmasAberto(true)}
+        />
+      )}
       <NovaTurmaModal
         aberto={modalTurmaAberto}
         onClose={() => setModalTurmaAberto(false)}
@@ -509,8 +529,36 @@ export default function AlunosPage() {
                         <TableCell className="text-sm text-muted-foreground">
                           {a.matricula}
                         </TableCell>
-                        <TableCell>{turma?.nome || "Não informada"}</TableCell>
-                        <TableCell className="text-sm">{turma?.professorNome?.trim() || "Sem professora vinculada"}</TableCell>
+                        <TableCell>
+                          {podeGerenciar ? (
+                            <button
+                              type="button"
+                              onClick={() => setTrocandoSala(a)}
+                              title="Trocar sala e professora"
+                              className="group/troca inline-flex items-center gap-1.5 text-left hover:underline"
+                            >
+                              {turma?.nome || "Não informada"}
+                              <Pencil className="h-3 w-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/troca:opacity-100" />
+                            </button>
+                          ) : (
+                            turma?.nome || "Não informada"
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {podeGerenciar ? (
+                            <button
+                              type="button"
+                              onClick={() => setTrocandoSala(a)}
+                              title="Trocar sala e professora"
+                              className="group/troca inline-flex items-center gap-1.5 text-left hover:underline"
+                            >
+                              {turma?.professorNome?.trim() || "Sem professora vinculada"}
+                              <Pencil className="h-3 w-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/troca:opacity-100" />
+                            </button>
+                          ) : (
+                            turma?.professorNome?.trim() || "Sem professora vinculada"
+                          )}
+                        </TableCell>
                         <TableCell className="text-sm">
                           {formatDateBR(a.dataNascimento)}
                         </TableCell>
