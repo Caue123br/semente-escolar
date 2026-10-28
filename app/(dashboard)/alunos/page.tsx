@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { AlertCircle, Users, Plus, Search, Filter, Download, UserPlus, Cake, Heart } from "lucide-react";
+import { AlertCircle, Users, Plus, Search, Filter, Download, UserPlus, Cake, Heart, Pencil } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +38,8 @@ import { UploadFotoAluno } from "@/components/alunos/upload-foto";
 import type { Aluno, Turma } from "@/lib/types";
 import { NovaTurmaModal } from "@/components/alunos/nova-turma-modal";
 import { GerenciarTurmasModal } from "@/components/alunos/gerenciar-turmas-modal";
+import { TrocarSalaModal } from "@/components/alunos/trocar-sala-modal";
+import { MoverAlunosEmMassa } from "@/components/alunos/mover-alunos-em-massa";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { filtrarAlunos, listarProfessorasTurmas, normalizarBuscaAlunos, temAlertaSaude, type OpcaoProfessora } from "@/lib/filtros-alunos";
 
@@ -60,6 +62,11 @@ export default function AlunosPage() {
   const [editando, setEditando] = React.useState<Aluno | null>(null);
   const [pagina, setPagina] = React.useState(1);
   const [fotoNovoAluno, setFotoNovoAluno] = React.useState<Aluno | null>(null);
+  const [trocandoSala, setTrocandoSala] = React.useState<Aluno | null>(null);
+  const [selecionados, setSelecionados] = React.useState<ReadonlySet<string>>(new Set());
+  const [turmaInicial, setTurmaInicial] = React.useState<
+    Partial<Pick<Turma, "nome" | "serie" | "turno" | "capacidade" | "cor">> | null
+  >(null);
   const toast = useToast();
 
   const {
@@ -127,6 +134,14 @@ export default function AlunosPage() {
   };
 
   const turmasMap = React.useMemo(() => new Map(turmas.map((t) => [t.id, t])), [turmas]);
+  const ocupacaoPorTurma = React.useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const aluno of alunos) {
+      if (aluno.status !== "Ativo") continue;
+      mapa.set(aluno.turmaId, (mapa.get(aluno.turmaId) ?? 0) + 1);
+    }
+    return mapa;
+  }, [alunos]);
   const professoras = React.useMemo(() => listarProfessorasTurmas(turmas), [turmas]);
   const filtrados = filtrarAlunos(alunos, turmas, {
     busca, turmaFiltro, professoraFiltro, bilinguismo, comAlergia: podeGerenciar && comAlergia,
@@ -163,12 +178,28 @@ export default function AlunosPage() {
     { key: "nome", direction: "asc" }
   );
 
+  // Seleção só vale para quem está na lista filtrada atual (todas as páginas).
+  const selecionadosNaLista = ordenados.filter((a) => selecionados.has(a.id)).map((a) => a.id);
+  const todosSelecionados = ordenados.length > 0 && ordenados.every((a) => selecionados.has(a.id));
+  const alternarSelecionado = (id: string) => {
+    setSelecionados((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(id)) novo.delete(id);
+      else novo.add(id);
+      return novo;
+    });
+  };
+  const alternarTodos = () => {
+    setSelecionados(todosSelecionados ? new Set() : new Set(ordenados.map((a) => a.id)));
+  };
+
   const totalPaginas = Math.max(1, Math.ceil(ordenados.length / ALUNOS_POR_PAGINA));
   const visiveis = ordenados.slice((pagina - 1) * ALUNOS_POR_PAGINA, pagina * ALUNOS_POR_PAGINA);
 
   // Mudou filtro/busca: volta pra primeira página. Encolheu a lista: não fica em página vazia.
   React.useEffect(() => {
     setPagina(1);
+    setSelecionados(new Set());
   }, [busca, turmaFiltro, professoraFiltro, bilinguismo, comAlergia]);
   React.useEffect(() => {
     if (pagina > totalPaginas) setPagina(totalPaginas);
@@ -254,7 +285,7 @@ export default function AlunosPage() {
             <Button variant="outline" onClick={() => setModalGerenciarTurmasAberto(true)}>
               Turmas e professoras
             </Button>
-            <Button variant="outline" onClick={() => setModalTurmaAberto(true)}>
+            <Button variant="outline" onClick={() => { setTurmaInicial(null); setModalTurmaAberto(true); }}>
               <Plus className="mr-2 h-4 w-4" /> Nova turma
             </Button>
             <Button onClick={() => setModalAberto(true)} disabled={turmas.length === 0}>
@@ -308,10 +339,21 @@ export default function AlunosPage() {
         onClose={() => setEditando(null)}
         onSalvar={update}
       />
+      {podeGerenciar && (
+        <TrocarSalaModal
+          aluno={trocandoSala}
+          turmas={turmas}
+          ocupacaoPorTurma={ocupacaoPorTurma}
+          onClose={() => setTrocandoSala(null)}
+          onSalvar={update}
+          onGerenciarTurmas={() => setModalGerenciarTurmasAberto(true)}
+        />
+      )}
       <NovaTurmaModal
         aberto={modalTurmaAberto}
         onClose={() => setModalTurmaAberto(false)}
         onSalvar={addTurma}
+        inicial={turmaInicial}
       />
       {podeGerenciar && (
         <GerenciarTurmasModal
@@ -319,6 +361,11 @@ export default function AlunosPage() {
           onClose={() => setModalGerenciarTurmasAberto(false)}
           turmas={turmas}
           onSalvar={atualizarTurma}
+          onDuplicar={(t) => {
+            setModalGerenciarTurmasAberto(false);
+            setTurmaInicial({ nome: `${t.nome} B`, serie: t.serie, turno: t.turno, capacidade: t.capacidade, cor: t.cor });
+            setModalTurmaAberto(true);
+          }}
         />
       )}
 
@@ -447,7 +494,7 @@ export default function AlunosPage() {
             </CardHeader>
             <CardContent className="px-0 overflow-x-auto">
               {carregando && filtrados.length === 0 && (
-                <SkeletonTableRows rows={6} cols={podeGerenciar ? 8 : 7} />
+                <SkeletonTableRows rows={6} cols={podeGerenciar ? 9 : 7} />
               )}
               {!carregando && filtrados.length === 0 && (
                 <div className="p-8 text-center text-sm text-muted-foreground">
@@ -462,6 +509,17 @@ export default function AlunosPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {podeGerenciar && (
+                      <TableHead className="w-10">
+                        <input
+                          type="checkbox"
+                          aria-label="Selecionar todos os alunos filtrados"
+                          className="rounded"
+                          checked={todosSelecionados}
+                          onChange={alternarTodos}
+                        />
+                      </TableHead>
+                    )}
                     <SortHeader active={sort.key === "nome"} direction={sort.direction} onClick={() => toggle("nome")}>Aluno</SortHeader>
                     <SortHeader active={sort.key === "matricula"} direction={sort.direction} onClick={() => toggle("matricula")}>Matrícula</SortHeader>
                     <SortHeader active={sort.key === "turma"} direction={sort.direction} onClick={() => toggle("turma")}>Sala/Turma</SortHeader>
@@ -478,6 +536,17 @@ export default function AlunosPage() {
                     const resp = a.responsaveis.find((r) => r.principal) ?? a.responsaveis[0];
                     return (
                       <TableRow key={a.id}>
+                        {podeGerenciar && (
+                          <TableCell className="w-10">
+                            <input
+                              type="checkbox"
+                              aria-label={`Selecionar ${a.nome}`}
+                              className="rounded"
+                              checked={selecionados.has(a.id)}
+                              onChange={() => alternarSelecionado(a.id)}
+                            />
+                          </TableCell>
+                        )}
                         <TableCell>
                           <Link
                             href={podeGerenciar ? `/alunos/${a.id}` : `/pedagogico/${a.id}`}
@@ -509,8 +578,38 @@ export default function AlunosPage() {
                         <TableCell className="text-sm text-muted-foreground">
                           {a.matricula}
                         </TableCell>
-                        <TableCell>{turma?.nome || "Não informada"}</TableCell>
-                        <TableCell className="text-sm">{turma?.professorNome?.trim() || "Sem professora vinculada"}</TableCell>
+                        <TableCell>
+                          {podeGerenciar ? (
+                            <button
+                              type="button"
+                              onClick={() => setTrocandoSala(a)}
+                              title="Trocar sala e professora"
+                              aria-label={`Trocar sala de ${a.nome}`}
+                              className="group/troca inline-flex items-center gap-1.5 text-left hover:underline"
+                            >
+                              {turma?.nome || "Não informada"}
+                              <Pencil className="h-3 w-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/troca:opacity-100" />
+                            </button>
+                          ) : (
+                            turma?.nome || "Não informada"
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {podeGerenciar ? (
+                            <button
+                              type="button"
+                              onClick={() => setTrocandoSala(a)}
+                              title="Trocar sala e professora"
+                              aria-label={`Trocar professora de ${a.nome}`}
+                              className="group/troca inline-flex items-center gap-1.5 text-left hover:underline"
+                            >
+                              {turma?.professorNome?.trim() || "Sem professora vinculada"}
+                              <Pencil className="h-3 w-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/troca:opacity-100" />
+                            </button>
+                          ) : (
+                            turma?.professorNome?.trim() || "Sem professora vinculada"
+                          )}
+                        </TableCell>
                         <TableCell className="text-sm">
                           {formatDateBR(a.dataNascimento)}
                         </TableCell>
@@ -729,6 +828,15 @@ export default function AlunosPage() {
           </Card>
         </TabsContent>}
       </Tabs>
+
+      {podeGerenciar && (
+        <MoverAlunosEmMassa
+          selecionados={selecionadosNaLista}
+          turmas={turmas}
+          ocupacaoPorTurma={ocupacaoPorTurma}
+          onLimpar={() => setSelecionados(new Set())}
+        />
+      )}
 
       <ConfirmDialog
         aberto={!!confirmarExcluir}
