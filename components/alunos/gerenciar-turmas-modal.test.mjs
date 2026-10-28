@@ -149,3 +149,19 @@ test("botão Duplicar sala aparece só quando a página fornece onDuplicar", () 
   }));
   assert.ok(com.includes("Duplicar sala"));
 });
+
+test("Duplicar sala entrega a turma da própria linha", () => {
+  const hooks = hooksDeLinha();
+  const Modal = componente("diretor", hooks.react);
+  let duplicada = null;
+  const modal = hooks.renderizar(Modal, {
+    aberto: true, turmas, onClose() {}, onSalvar: async () => {}, onDuplicar: (turma) => { duplicada = turma; },
+  }, false);
+  const linha = encontrar(modal, (elemento) => typeof elemento.type === "function" && elemento.props?.turma?.id === "sala-3");
+  assert.ok(linha);
+  hooks.reiniciar();
+  const arvore = hooks.renderizar(linha.type, linha.props);
+  encontrar(arvore, (elemento) => elemento.props?.children === "Duplicar sala").props.onClick();
+  assert.equal(duplicada?.id, "sala-3");
+  assert.equal(duplicada?.nome, "Sala Exemplo 3");
+});

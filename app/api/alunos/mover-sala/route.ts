@@ -81,7 +81,9 @@ export async function POST(req: Request) {
   }
 
   // Mesma regra do PATCH individual: só aluno Ativo ocupa vaga; capacidade 0 é
-  // sala fechada; a direção pode confirmar por cima.
+  // sala fechada; a direção pode confirmar por cima. Como no PATCH, a checagem
+  // é advisory (sem lock): dois lotes simultâneos podem passar do limite — o
+  // limite aqui é aviso para a direção, não constraint do banco.
   const capacidade = Number(turma.capacidade ?? 0);
   const ativosMovendo = movendo.filter((aluno) => aluno.status === "Ativo").length;
   if (
@@ -112,7 +114,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const { error: erroUpdate } = await sb
+  const { data: atualizados, error: erroUpdate } = await sb
     .from("alunos")
     .update({ turma_id: turmaId })
     .in("id", movendo.map((aluno) => aluno.id))
@@ -124,7 +126,12 @@ export async function POST(req: Request) {
     return erros.servidorIndisponivel(erroUpdate);
   }
 
-  for (const aluno of movendo) {
+  // Auditoria é prova: só registra (e só conta) as linhas que o UPDATE gravou
+  // de fato — um aluno excluído por outra pessoa entre o SELECT e o UPDATE é
+  // pulado pela gravação e não pode ganhar registro de movimentação.
+  const idsGravados = new Set((atualizados ?? []).map((linha) => String(linha.id)));
+  const movidosDeFato = movendo.filter((aluno) => idsGravados.has(String(aluno.id)));
+  for (const aluno of movidosDeFato) {
     await registrarAudit(
       "editar",
       "alunos",
@@ -133,5 +140,5 @@ export async function POST(req: Request) {
       usuario
     );
   }
-  return NextResponse.json({ ok: true, movidos: movendo.length, turmaNome: String(turma.nome) });
+  return NextResponse.json({ ok: true, movidos: movidosDeFato.length, turmaNome: String(turma.nome) });
 }

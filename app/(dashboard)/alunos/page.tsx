@@ -584,6 +584,7 @@ export default function AlunosPage() {
                               type="button"
                               onClick={() => setTrocandoSala(a)}
                               title="Trocar sala e professora"
+                              aria-label={`Trocar sala de ${a.nome}`}
                               className="group/troca inline-flex items-center gap-1.5 text-left hover:underline"
                             >
                               {turma?.nome || "Não informada"}
@@ -599,6 +600,7 @@ export default function AlunosPage() {
                               type="button"
                               onClick={() => setTrocandoSala(a)}
                               title="Trocar sala e professora"
+                              aria-label={`Trocar professora de ${a.nome}`}
                               className="group/troca inline-flex items-center gap-1.5 text-left hover:underline"
                             >
                               {turma?.professorNome?.trim() || "Sem professora vinculada"}

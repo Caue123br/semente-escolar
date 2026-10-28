@@ -28,6 +28,16 @@ export function MoverAlunosEmMassa({ selecionados, turmas, ocupacaoPorTurma, onL
   const [movendo, setMovendo] = React.useState(false);
   const [conflitoLotacao, setConflitoLotacao] = React.useState<string | null>(null);
 
+  // A barra continua montada quando a seleção zera (só deixa de renderizar):
+  // sem este reset, o destino de uma operação antiga voltaria pré-selecionado
+  // na próxima seleção, deixando "Mover" armado para a sala errada.
+  React.useEffect(() => {
+    if (selecionados.length === 0) {
+      setTurmaId("");
+      setConflitoLotacao(null);
+    }
+  }, [selecionados.length]);
+
   if (selecionados.length === 0) return null;
 
   const mover = async (confirmarLotacao: boolean) => {
@@ -56,6 +66,11 @@ export function MoverAlunosEmMassa({ selecionados, turmas, ocupacaoPorTurma, onL
       setConflitoLotacao(null);
       const destino = turmas.find((t) => t.id === turmaId);
       const movidos = typeof corpo.movidos === "number" ? corpo.movidos : selecionados.length;
+      if (movidos === 0) {
+        // Nada mudou no banco: avisa sem fingir movimentação e mantém a seleção.
+        toast.success("Nenhuma mudança", "Os alunos selecionados já estão nessa sala.");
+        return;
+      }
       toast.success(
         "Alunos movidos",
         `${movidos} aluno(s) agora em ${destino?.nome ?? "nova sala"}${
@@ -63,6 +78,9 @@ export function MoverAlunosEmMassa({ selecionados, turmas, ocupacaoPorTurma, onL
         }.`
       );
       window.dispatchEvent(new CustomEvent("semente:changed:alunos"));
+      // total_alunos é recalculado por trigger no banco: o cache de turmas
+      // (usado em "Turmas e professoras") precisa recarregar junto.
+      window.dispatchEvent(new CustomEvent("semente:changed:turmas"));
       setTurmaId("");
       onLimpar();
     } catch (e) {
@@ -110,7 +128,7 @@ export function MoverAlunosEmMassa({ selecionados, turmas, ocupacaoPorTurma, onL
         descricao={conflitoLotacao ?? ""}
         variante="warning"
         textoBotaoConfirmar="Mover mesmo assim"
-        onConfirmar={() => void mover(true)}
+        onConfirmar={() => mover(true)}
         onFechar={() => setConflitoLotacao(null)}
       />
     </>

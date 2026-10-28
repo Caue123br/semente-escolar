@@ -54,6 +54,9 @@ export function TrocarSalaModal({ aluno, turmas, ocupacaoPorTurma, onClose, onSa
     try {
       await onSalvar(aluno.id, { turmaId }, confirmarLotacao ? { extras: { confirmarLotacao: true } } : {});
       setConflitoLotacao(null);
+      // total_alunos é recalculado por trigger no banco: o cache de turmas
+      // (usado em "Turmas e professoras") precisa recarregar junto.
+      window.dispatchEvent(new CustomEvent("semente:changed:turmas"));
       toast.success(
         "Sala atualizada",
         `${primeiroNome} agora está em ${turmaNova?.nome ?? "outra sala"}${
@@ -62,9 +65,20 @@ export function TrocarSalaModal({ aluno, turmas, ocupacaoPorTurma, onClose, onSa
       );
       onClose();
     } catch (e) {
-      // Sala na capacidade: a própria tela pergunta se insiste (a store não avisa).
+      // Sala na capacidade: a própria tela pergunta se insiste (a store não
+      // avisa). A mensagem da API manda "escolher outra turma" — contraditória
+      // num diálogo cujo botão é "Mover mesmo assim" — então o texto é montado
+      // aqui a partir dos números do conflito.
       if (e instanceof ErroApi && e.codigo === "lotacao") {
-        setConflitoLotacao(e.message);
+        const nomeDestino =
+          typeof e.payload.turmaNome === "string" ? e.payload.turmaNome : turmaNova?.nome ?? "a sala escolhida";
+        const ocupacao = Number(e.payload.ocupacao ?? 0);
+        const capacidade = Number(e.payload.capacidade ?? 0);
+        setConflitoLotacao(
+          capacidade === 0
+            ? `A sala ${nomeDestino} está fechada (capacidade 0).`
+            : `A sala ${nomeDestino} já tem ${ocupacao} de ${capacidade} vagas ocupadas.`
+        );
         return;
       }
       setConflitoLotacao(null);
@@ -130,8 +144,10 @@ export function TrocarSalaModal({ aluno, turmas, ocupacaoPorTurma, onClose, onSa
             </div>
             <button
               type="button"
-              className="text-xs text-primary underline-offset-2 hover:underline"
+              className="text-xs text-primary underline-offset-2 hover:underline disabled:opacity-50"
+              disabled={salvando}
               onClick={() => {
+                if (salvando) return;
                 onClose();
                 onGerenciarTurmas();
               }}
@@ -158,7 +174,7 @@ export function TrocarSalaModal({ aluno, turmas, ocupacaoPorTurma, onClose, onSa
         descricao={conflitoLotacao ? `${conflitoLotacao} Mover ${primeiroNome} mesmo assim?` : ""}
         variante="warning"
         textoBotaoConfirmar="Mover mesmo assim"
-        onConfirmar={() => void salvar(true)}
+        onConfirmar={() => salvar(true)}
         onFechar={() => setConflitoLotacao(null)}
       />
     </>

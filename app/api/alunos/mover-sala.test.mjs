@@ -32,9 +32,12 @@ function ambiente({ perfil = "diretor", escopoTurmas = null, alunos = [], turmas
   const db = {
     from(tabela) {
       const filtros = [];
-      let operacao = "select", payload, unico = false, head = false;
+      // Como SOFT_DELETE_TABLES em lib/db/postgres.ts: toda query em alunos
+      // ganha deleted_at IS NULL automaticamente, sem o route pedir.
+      if (tabela === "alunos") filtros.push((linha) => (linha.deleted_at ?? null) === null);
+      let operacao = "select", payload, unico = false, head = false, projecao = "*";
       const consulta = {
-        select(_colunas, opcoes) { head = opcoes?.head === true; return consulta; },
+        select(colunas, opcoes) { head = opcoes?.head === true; projecao = colunas ?? "*"; return consulta; },
         eq(campo, valor) { filtros.push((linha) => linha[campo] === valor); return consulta; },
         in(campo, valores) { filtros.push((linha) => valores.includes(linha[campo])); return consulta; },
         is(campo, valor) { filtros.push((linha) => (linha[campo] ?? null) === valor); return consulta; },
@@ -44,8 +47,14 @@ function ambiente({ perfil = "diretor", escopoTurmas = null, alunos = [], turmas
         then(resolve, reject) {
           const rows = tabelas[tabela].filter((linha) => filtros.every((filtro) => filtro(linha)));
           if (operacao === "update") rows.forEach((linha) => Object.assign(linha, payload));
+          // Como o builder real, devolve só as colunas pedidas no select.
+          const campos = typeof projecao === "string" && projecao.trim() !== "*"
+            ? projecao.split(",").map((campo) => campo.trim())
+            : null;
+          const projetar = (linha) =>
+            campos ? Object.fromEntries(campos.map((campo) => [campo, linha[campo]])) : structuredClone(linha);
           return Promise.resolve({
-            data: head ? null : structuredClone(unico ? rows[0] ?? null : rows),
+            data: head ? null : unico ? (rows[0] ? projetar(rows[0]) : null) : rows.map(projetar),
             count: rows.length, error: null,
           }).then(resolve, reject);
         },
@@ -163,6 +172,30 @@ test("aluno inexistente ou excluído devolve 422 e não move ninguém", async ()
   const resposta = await env.POST(req({ alunoIds: ["a1", "a2"], turmaId: "sala-b" }));
   assert.equal(resposta.status, 422);
   assert.equal(env.tabelas.alunos[0].turma_id, "sala-a");
+});
+
+test("capacidade 0 é sala fechada: bloqueia sem confirmação e aceita com confirmarLotacao", async () => {
+  const fechada = { ...turmaB, capacidade: 0 };
+  const bloqueio = ambiente({ turmas: [turmaA, fechada], alunos: [aluno("a1")] });
+  const resposta = await bloqueio.POST(req({ alunoIds: ["a1"], turmaId: "sala-b" }));
+  assert.equal(resposta.status, 422);
+  assert.equal((await resposta.json()).codigo, "lotacao");
+  assert.equal(bloqueio.tabelas.alunos[0].turma_id, "sala-a");
+
+  const confirmada = ambiente({ turmas: [turmaA, fechada], alunos: [aluno("a1")] });
+  assert.equal((await confirmada.POST(req({ alunoIds: ["a1"], turmaId: "sala-b", confirmarLotacao: true }))).status, 200);
+  assert.equal(confirmada.tabelas.alunos[0].turma_id, "sala-b");
+});
+
+test("aluno excluído (soft delete) na sala destino não ocupa vaga na contagem", async () => {
+  const destino = { ...turmaB, capacidade: 1 };
+  const env = ambiente({
+    turmas: [turmaA, destino],
+    alunos: [{ ...aluno("b1", "sala-b"), deleted_at: "2026-01-01" }, aluno("a1")],
+  });
+  const resposta = await env.POST(req({ alunoIds: ["a1"], turmaId: "sala-b" }));
+  assert.equal(resposta.status, 200);
+  assert.equal((await resposta.json()).movidos, 1);
 });
 
 test("professor restrito não move para sala fora do escopo (403) nem aluno fora do escopo (422)", async () => {
