@@ -17,9 +17,11 @@ interface Props {
   aberto: boolean;
   onClose: () => void;
   onSalvar: (turma: Turma) => Promise<unknown>;
+  /** Pré-preenche o formulário (ex.: duplicar uma sala existente). */
+  inicial?: Partial<Pick<Turma, "nome" | "serie" | "turno" | "capacidade" | "cor">> | null;
 }
 
-export function NovaTurmaModal({ aberto, onClose, onSalvar }: Props) {
+export function NovaTurmaModal({ aberto, onClose, onSalvar, inicial }: Props) {
   const toast = useToast();
   const [nome, setNome] = React.useState("");
   const [serie, setSerie] = React.useState<SerieEnum>("Maternal");
@@ -67,6 +69,16 @@ export function NovaTurmaModal({ aberto, onClose, onSalvar }: Props) {
       ativo = false;
     };
   }, [aberto]);
+
+  // Duplicação: ao abrir com valores iniciais, o formulário já vem preenchido.
+  React.useEffect(() => {
+    if (!aberto || !inicial) return;
+    if (inicial.nome !== undefined) setNome(inicial.nome);
+    if (inicial.serie !== undefined) setSerie(inicial.serie);
+    if (inicial.turno !== undefined) setTurno(inicial.turno);
+    if (inicial.capacidade !== undefined) setCapacidade(String(inicial.capacidade));
+    if (inicial.cor !== undefined) setCor(inicial.cor);
+  }, [aberto, inicial]);
 
   const fechar = () => {
     if (salvando) return;

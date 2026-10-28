@@ -17,12 +17,14 @@ interface Props {
   onClose: () => void;
   turmas: Turma[];
   onSalvar: (id: string, patch: Partial<Turma>) => Promise<void>;
+  /** Pré-preenche "Nova turma" com os dados desta sala (fluxo "sala B"). */
+  onDuplicar?: (turma: Turma) => void;
 }
 
 type Professora = { id: string; nome: string };
 const selectClass = "mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
 
-export function GerenciarTurmasModal({ aberto, onClose, turmas, onSalvar }: Props) {
+export function GerenciarTurmasModal({ aberto, onClose, turmas, onSalvar, onDuplicar }: Props) {
   const { perfil, carregando: carregandoPerfil } = usePerfil();
   const podeGerenciar = podeGerenciarAlunos(perfil);
   const [professoras, setProfessoras] = React.useState<Professora[]>([]);
@@ -123,7 +125,7 @@ export function GerenciarTurmasModal({ aberto, onClose, turmas, onSalvar }: Prop
           {turmas.length === 0 ? (
             <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhuma turma cadastrada. Use “Nova turma” na tela de Alunos para criar a primeira sala.</p>
           ) : turmas.map((turma) => (
-            <LinhaTurma key={turma.id} turma={turma} professoras={professoras} carregandoProfessoras={carregando} desabilitada={Boolean(salvandoId)} salvando={salvandoId === turma.id} onSalvar={salvar} />
+            <LinhaTurma key={turma.id} turma={turma} professoras={professoras} carregandoProfessoras={carregando} desabilitada={Boolean(salvandoId)} salvando={salvandoId === turma.id} onSalvar={salvar} onDuplicar={onDuplicar} />
           ))}
         </div>
 
@@ -133,13 +135,14 @@ export function GerenciarTurmasModal({ aberto, onClose, turmas, onSalvar }: Prop
   );
 }
 
-function LinhaTurma({ turma, professoras, carregandoProfessoras, desabilitada, salvando, onSalvar }: {
+function LinhaTurma({ turma, professoras, carregandoProfessoras, desabilitada, salvando, onSalvar, onDuplicar }: {
   turma: Turma;
   professoras: Professora[];
   carregandoProfessoras: boolean;
   desabilitada: boolean;
   salvando: boolean;
   onSalvar: Props["onSalvar"];
+  onDuplicar?: Props["onDuplicar"];
 }) {
   const toast = useToast();
   const [nome, setNome] = React.useState(turma.nome);
@@ -258,6 +261,11 @@ function LinhaTurma({ turma, professoras, carregandoProfessoras, desabilitada, s
         </div>
         {erro && <p role="alert" className="flex items-start gap-2 text-sm text-destructive"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{erro}</p>}
         <div className="flex flex-wrap items-center justify-end gap-2">
+          {onDuplicar && (
+            <Button type="button" variant="outline" onClick={() => onDuplicar(turma)}>
+              Duplicar sala
+            </Button>
+          )}
           {turma.professorNome?.trim() && <Button type="button" variant="ghost" onClick={() => void remover()}>Remover atribuição</Button>}
           <Button type="submit">{salvando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Salvar turma</Button>
         </div>

@@ -139,3 +139,13 @@ test("remover professora preserva nome e capacidade ainda não salvos na mesma s
   assert.equal(encontrar(arvore, (elemento) => elemento.props?.id === "gerenciar-sala-1-capacidade").props.value, "30");
   assert.equal(turma.professorNome, "");
 });
+
+test("botão Duplicar sala aparece só quando a página fornece onDuplicar", () => {
+  const Modal = componente();
+  const sem = renderToStaticMarkup(React.createElement(Modal, { aberto: true, turmas, onClose() {}, onSalvar: async () => {} }));
+  assert.ok(!sem.includes("Duplicar sala"));
+  const com = renderToStaticMarkup(React.createElement(Modal, {
+    aberto: true, turmas, onClose() {}, onSalvar: async () => {}, onDuplicar() {},
+  }));
+  assert.ok(com.includes("Duplicar sala"));
+});

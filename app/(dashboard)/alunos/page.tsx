@@ -64,6 +64,9 @@ export default function AlunosPage() {
   const [fotoNovoAluno, setFotoNovoAluno] = React.useState<Aluno | null>(null);
   const [trocandoSala, setTrocandoSala] = React.useState<Aluno | null>(null);
   const [selecionados, setSelecionados] = React.useState<ReadonlySet<string>>(new Set());
+  const [turmaInicial, setTurmaInicial] = React.useState<
+    Partial<Pick<Turma, "nome" | "serie" | "turno" | "capacidade" | "cor">> | null
+  >(null);
   const toast = useToast();
 
   const {
@@ -282,7 +285,7 @@ export default function AlunosPage() {
             <Button variant="outline" onClick={() => setModalGerenciarTurmasAberto(true)}>
               Turmas e professoras
             </Button>
-            <Button variant="outline" onClick={() => setModalTurmaAberto(true)}>
+            <Button variant="outline" onClick={() => { setTurmaInicial(null); setModalTurmaAberto(true); }}>
               <Plus className="mr-2 h-4 w-4" /> Nova turma
             </Button>
             <Button onClick={() => setModalAberto(true)} disabled={turmas.length === 0}>
@@ -350,6 +353,7 @@ export default function AlunosPage() {
         aberto={modalTurmaAberto}
         onClose={() => setModalTurmaAberto(false)}
         onSalvar={addTurma}
+        inicial={turmaInicial}
       />
       {podeGerenciar && (
         <GerenciarTurmasModal
@@ -357,6 +361,11 @@ export default function AlunosPage() {
           onClose={() => setModalGerenciarTurmasAberto(false)}
           turmas={turmas}
           onSalvar={atualizarTurma}
+          onDuplicar={(t) => {
+            setModalGerenciarTurmasAberto(false);
+            setTurmaInicial({ nome: `${t.nome} B`, serie: t.serie, turno: t.turno, capacidade: t.capacidade, cor: t.cor });
+            setModalTurmaAberto(true);
+          }}
         />
       )}
 
