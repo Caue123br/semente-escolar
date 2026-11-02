@@ -29,8 +29,10 @@ const securityHeaders = [
   },
   { key: "X-DNS-Prefetch-Control", value: "on" },
   {
+    // camera=(self): a captura de foto do aluno usa a webcam no próprio app;
+    // iframes/terceiros continuam sem acesso, e o resto segue fechado.
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+    value: "camera=(self), microphone=(), geolocation=(), interest-cohort=()",
   },
   { key: "Content-Security-Policy", value: contentSecurityPolicy },
 ];
