@@ -35,9 +35,12 @@ export function recorteQuadrado(largura: number, altura: number): { sx: number; 
 /** Congela o frame atual do vídeo num JPEG quadrado (ladoDestino × ladoDestino). */
 export function capturarQuadrado(
   video: FonteVideo,
-  canvas: CanvasCaptura,
+  canvasReal: CanvasCaptura | HTMLCanvasElement,
   ladoDestino = 512
 ): Promise<Blob> {
+  // O drawImage do canvas real é sobrecarregado (CanvasImageSource) e não casa
+  // estruturalmente com o contrato mínimo stubável; o cast fecha essa ponte.
+  const canvas = canvasReal as CanvasCaptura;
   const { sx, sy, lado } = recorteQuadrado(video.videoWidth, video.videoHeight);
   canvas.width = ladoDestino;
   canvas.height = ladoDestino;
