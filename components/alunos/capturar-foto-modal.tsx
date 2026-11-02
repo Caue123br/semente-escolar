@@ -40,6 +40,14 @@ export function CapturarFotoModal({ alunoId, nomeAluno, onClose, onAtualizado }:
   const [erroCamera, setErroCamera] = React.useState("");
   const [capturada, setCapturada] = React.useState<{ blob: Blob; url: string } | null>(null);
   const [enviando, setEnviando] = React.useState(false);
+  const montadoRef = React.useRef(true);
+
+  React.useEffect(() => {
+    montadoRef.current = true;
+    return () => {
+      montadoRef.current = false;
+    };
+  }, []);
 
   React.useEffect(() => {
     let ativo = true;
@@ -90,6 +98,9 @@ export function CapturarFotoModal({ alunoId, nomeAluno, onClose, onAtualizado }:
     if (!video || video.videoWidth === 0) return;
     try {
       const blob = await capturarQuadrado(video, document.createElement("canvas"));
+      // Modal fechado durante o toBlob: criar a object URL aqui vazaria memória
+      // (o setState é descartado e o efeito de revogação nunca a registraria).
+      if (!montadoRef.current) return;
       setCapturada({ blob, url: URL.createObjectURL(blob) });
     } catch {
       toast.error("Não foi possível capturar", "Tente de novo ou envie um arquivo.");
@@ -104,12 +115,14 @@ export function CapturarFotoModal({ alunoId, nomeAluno, onClose, onAtualizado }:
       fd.set("file", file);
       const resposta = await fetch("/api/upload/foto-aluno", { method: "POST", body: fd });
       const data = (await resposta.json().catch(() => ({}))) as { url?: unknown; error?: unknown };
-      if (!resposta.ok) {
+      // 200 sem a url no corpo é contrato quebrado: tratar como erro em vez de
+      // propagar "undefined" para o cadastro (o PATCH gravaria por cima da URL boa).
+      if (!resposta.ok || typeof data.url !== "string") {
         toast.error("Erro ao salvar a foto", typeof data.error === "string" ? data.error : "Tente de novo");
         return;
       }
       toast.success("Foto atualizada!", nomeAluno);
-      onAtualizado?.(String(data.url));
+      onAtualizado?.(data.url);
       onClose();
     } catch (erro) {
       toast.error("Erro de conexão", String(erro));

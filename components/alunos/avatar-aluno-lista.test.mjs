@@ -59,6 +59,25 @@ test("sem foto e com permissão vira botão de captura identificado pelo aluno",
   assert.ok(html.includes("<button"));
 });
 
+test("clicar no botão de captura entrega o aluno da própria linha", () => {
+  const AvatarLista = componente();
+  let capturado = null;
+  // Sem hooks no componente: dá para chamar como função e acionar o onClick real.
+  const arvore = AvatarLista({
+    aluno: base, href: "/alunos/a1", podeGerenciar: true,
+    onCapturar: (aluno) => { capturado = aluno; },
+  });
+  function encontrarBotao(no) {
+    if (Array.isArray(no)) return no.map(encontrarBotao).find(Boolean);
+    if (!no || typeof no !== "object") return undefined;
+    if (no.type === "button") return no;
+    return encontrarBotao(no.props?.children);
+  }
+  encontrarBotao(arvore).props.onClick();
+  assert.equal(capturado?.id, "a1");
+  assert.equal(capturado?.nome, "Alícia Quintela");
+});
+
 test("sem permissão fica só as iniciais, sem botão nem link de captura", () => {
   const AvatarLista = componente();
   const html = renderToStaticMarkup(React.createElement(AvatarLista, {

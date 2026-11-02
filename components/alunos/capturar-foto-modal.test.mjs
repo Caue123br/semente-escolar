@@ -24,7 +24,7 @@ function componente(react = React, globais = {}) {
       if (id === "react") return react;
       if (id === "react/jsx-runtime" || id === "lucide-react") return require(id);
       if (id === "@/lib/toast") return { useToast: () => globais.toast ?? { success() {}, error() {} } };
-      if (id === "@/lib/captura-foto") return { capturarQuadrado: async () => ({ falso: true }) };
+      if (id === "@/lib/captura-foto") return { capturarQuadrado: globais.capturar ?? (async () => ({ falso: true })) };
       if (id === "@/components/ui/button") return { Button: ({ children, variant, size, ...props }) => React.createElement("button", props, children) };
       throw new Error(`Dependência inesperada: ${id}`);
     },
@@ -43,8 +43,10 @@ test("render inicial mostra o estado de câmera e o fallback de arquivo", () => 
   assert.ok(html.includes("Enviar arquivo"));
 });
 
+// ---- Harness: hooks falsos com estado persistente, cleanups e desmontagem ----
+
 function hooksFalsos() {
-  const estados = [], dependencias = [];
+  const estados = [], dependencias = [], limpezas = [];
   let estado = 0, efeito = 0, pendentes = [];
   return {
     react: {
@@ -63,7 +65,7 @@ function hooksFalsos() {
         const indice = efeito++;
         if (!dependencias[indice] || !deps || deps.some((valor, i) => !Object.is(valor, dependencias[indice][i]))) {
           dependencias[indice] = deps ?? [];
-          pendentes.push(callback);
+          pendentes.push({ indice, callback });
         }
       },
       useCallback(callback) { return callback; },
@@ -73,8 +75,15 @@ function hooksFalsos() {
       efeito = 0;
       pendentes = [];
       const arvore = Componente(props);
-      pendentes.forEach((callback) => callback());
+      pendentes.forEach(({ indice, callback }) => {
+        if (typeof limpezas[indice] === "function") limpezas[indice]();
+        limpezas[indice] = callback();
+      });
       return arvore;
+    },
+    desmontar() {
+      limpezas.forEach((limpeza) => { if (typeof limpeza === "function") limpeza(); });
+      limpezas.length = 0;
     },
   };
 }
@@ -101,11 +110,143 @@ function contemTexto(no, texto) {
 
 const aguardar = () => new Promise((resolver) => setTimeout(resolver, 0));
 
-test("sem câmera disponível mostra o aviso e o envio de arquivo funciona de ponta a ponta", async () => {
-  class FormDataFalso {
-    constructor() { this.dados = new Map(); }
-    set(chave, valor) { this.dados.set(chave, valor); }
+class FormDataFalso {
+  constructor() { this.dados = new Map(); }
+  set(chave, valor) { this.dados.set(chave, valor); }
+}
+
+class FileFalso {
+  constructor(partes, nome, opcoes) {
+    this.partes = partes;
+    this.name = nome;
+    this.type = opcoes?.type;
   }
+}
+
+function streamFalso(contagem) {
+  return { getTracks: () => [{ stop: () => { contagem.parados += 1; } }] };
+}
+
+test("fluxo completo da webcam: tirar foto, usar esta foto e enviar o JPEG capturado", async () => {
+  const contagem = { parados: 0 };
+  const capturas = [];
+  const blobCapturado = { marcador: "blob-webcam" };
+  const chamadas = [];
+  const urls = { criadas: 0, revogadas: 0 };
+  let atualizado = null;
+  let fechou = 0;
+  const hooks = hooksFalsos();
+  const Modal = componente(hooks.react, {
+    navigator: { mediaDevices: { getUserMedia: async (regras) => { capturas.push(regras); return streamFalso(contagem); } } },
+    document: { createElement: () => ({ canvas: true }) },
+    URL: { createObjectURL: () => { urls.criadas += 1; return "blob:falso"; }, revokeObjectURL: () => { urls.revogadas += 1; } },
+    FormData: FormDataFalso,
+    File: FileFalso,
+    capturar: async (video, canvas) => { capturas.push({ video, canvas }); return blobCapturado; },
+    fetch: async (url, opcoes) => {
+      chamadas.push({ url, body: opcoes.body });
+      return { ok: true, json: async () => ({ ok: true, url: "/api/uploads/x/alunos/a1/f.jpg" }) };
+    },
+  });
+  const props = {
+    alunoId: "a1", nomeAluno: "Alícia Quintela",
+    onClose: () => { fechou += 1; }, onAtualizado: (url) => { atualizado = url; },
+  };
+
+  let arvore = hooks.renderizar(Modal, props);
+  await aguardar();
+  arvore = hooks.renderizar(Modal, props);
+
+  // Câmera ativa: o botão Tirar foto aparece e o vídeo recebe o stream falso.
+  const video = encontrar(arvore, (no) => no.type === "video");
+  video.props.ref.current = { videoWidth: 640, videoHeight: 480 };
+  encontrar(arvore, (no) => typeof no.type === "function" && typeof no.props?.onClick === "function" && contemTexto(no, "Tirar foto")).props.onClick();
+  await aguardar();
+  arvore = hooks.renderizar(Modal, props);
+
+  // Prévia congelada com as duas ações.
+  assert.ok(encontrar(arvore, (no) => no.type === "img" && no.props?.src === "blob:falso"));
+  assert.ok(encontrar(arvore, (no) => contemTexto(no, "Tirar outra")));
+  encontrar(arvore, (no) => typeof no.type === "function" && typeof no.props?.onClick === "function" && contemTexto(no, "Usar esta foto")).props.onClick();
+  await aguardar();
+
+  // O upload leva o blob capturado como File JPEG pelo contrato da rota.
+  assert.equal(chamadas[0].url, "/api/upload/foto-aluno");
+  assert.equal(chamadas[0].body.dados.get("alunoId"), "a1");
+  const arquivo = chamadas[0].body.dados.get("file");
+  assert.ok(arquivo instanceof FileFalso);
+  assert.equal(arquivo.partes[0], blobCapturado);
+  assert.equal(arquivo.name, "webcam.jpg");
+  assert.equal(arquivo.type, "image/jpeg");
+  assert.equal(atualizado, "/api/uploads/x/alunos/a1/f.jpg");
+  assert.equal(fechou, 1);
+  assert.equal(urls.criadas, 1);
+});
+
+test("fechar o modal desliga a câmera — inclusive quando getUserMedia resolve depois do fechamento", async () => {
+  const contagem = { parados: 0 };
+  const hooks = hooksFalsos();
+  const Modal = componente(hooks.react, {
+    navigator: { mediaDevices: { getUserMedia: async () => streamFalso(contagem) } },
+  });
+  const props = { alunoId: "a1", nomeAluno: "Alícia", onClose() {} };
+  hooks.renderizar(Modal, props);
+  await aguardar();
+  hooks.desmontar();
+  assert.equal(contagem.parados, 1);
+
+  // Corrida: a permissão chega depois do modal fechado — o stream novo também para.
+  const tardio = { parados: 0 };
+  let liberar;
+  const hooks2 = hooksFalsos();
+  const Modal2 = componente(hooks2.react, {
+    navigator: { mediaDevices: { getUserMedia: () => new Promise((resolver) => { liberar = () => resolver(streamFalso(tardio)); }) } },
+  });
+  hooks2.renderizar(Modal2, props);
+  hooks2.desmontar();
+  liberar();
+  await aguardar();
+  assert.equal(tardio.parados, 1);
+});
+
+test("fechar durante o toBlob não deixa object URL órfã", async () => {
+  const contagem = { parados: 0 };
+  const urls = { criadas: 0 };
+  let liberarBlob;
+  const hooks = hooksFalsos();
+  const Modal = componente(hooks.react, {
+    navigator: { mediaDevices: { getUserMedia: async () => streamFalso(contagem) } },
+    document: { createElement: () => ({}) },
+    URL: { createObjectURL: () => { urls.criadas += 1; return "blob:falso"; }, revokeObjectURL() {} },
+    capturar: () => new Promise((resolver) => { liberarBlob = () => resolver({ marcador: "blob" }); }),
+  });
+  const props = { alunoId: "a1", nomeAluno: "Alícia", onClose() {} };
+  let arvore = hooks.renderizar(Modal, props);
+  await aguardar();
+  arvore = hooks.renderizar(Modal, props);
+  const video = encontrar(arvore, (no) => no.type === "video");
+  video.props.ref.current = { videoWidth: 640, videoHeight: 480 };
+  encontrar(arvore, (no) => typeof no.type === "function" && typeof no.props?.onClick === "function" && contemTexto(no, "Tirar foto")).props.onClick();
+  hooks.desmontar();
+  liberarBlob();
+  await aguardar();
+  assert.equal(urls.criadas, 0);
+});
+
+test("permissão negada explica como liberar e mantém o envio de arquivo", async () => {
+  const hooks = hooksFalsos();
+  const Modal = componente(hooks.react, {
+    navigator: { mediaDevices: { getUserMedia: async () => { throw { name: "NotAllowedError" }; } } },
+  });
+  const props = { alunoId: "a1", nomeAluno: "Alícia", onClose() {} };
+  hooks.renderizar(Modal, props);
+  await aguardar();
+  const arvore = hooks.renderizar(Modal, props);
+  assert.ok(contemTexto(arvore, "bloqueou a câmera"));
+  assert.ok(encontrar(arvore, (no) => contemTexto(no, "Enviar arquivo")));
+});
+
+test("sem câmera disponível mostra o aviso e o envio de arquivo funciona de ponta a ponta", async () => {
   const chamadas = [];
   const toasts = [];
   let atualizado = null;
@@ -144,10 +285,6 @@ test("sem câmera disponível mostra o aviso e o envio de arquivo funciona de po
 });
 
 test("upload com erro mantém o modal aberto e avisa", async () => {
-  class FormDataFalso {
-    constructor() { this.dados = new Map(); }
-    set(chave, valor) { this.dados.set(chave, valor); }
-  }
   const toasts = [];
   let fechou = 0;
   const hooks = hooksFalsos();
@@ -167,4 +304,31 @@ test("upload com erro mantém o modal aberto e avisa", async () => {
 
   assert.equal(fechou, 0);
   assert.ok(toasts.some((texto) => texto.includes("5 MB")));
+});
+
+test("200 sem url no corpo é tratado como erro, sem propagar foto inválida", async () => {
+  const toasts = [];
+  let atualizado = null;
+  let fechou = 0;
+  const hooks = hooksFalsos();
+  const Modal = componente(hooks.react, {
+    navigator: {},
+    FormData: FormDataFalso,
+    fetch: async () => ({ ok: true, json: async () => { throw new Error("corpo não-JSON"); } }),
+    toast: { success() {}, error: (t) => toasts.push(t) },
+  });
+  const props = {
+    alunoId: "a1", nomeAluno: "Alícia",
+    onClose: () => { fechou += 1; }, onAtualizado: (url) => { atualizado = url; },
+  };
+
+  let arvore = hooks.renderizar(Modal, props);
+  arvore = hooks.renderizar(Modal, props);
+  encontrar(arvore, (no) => no.type === "input" && no.props?.type === "file")
+    .props.onChange({ target: { files: [{ name: "x.png" }], value: "" } });
+  await aguardar();
+
+  assert.equal(atualizado, null);
+  assert.equal(fechou, 0);
+  assert.ok(toasts.includes("Erro ao salvar a foto"));
 });
