@@ -1,10 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Camera, Loader2 } from "lucide-react";
+import { Camera } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { initials, cn } from "@/lib/utils";
-import { useToast } from "@/lib/toast";
+import { CapturarFotoModal } from "@/components/alunos/capturar-foto-modal";
 
 interface UploadFotoProps {
   alunoId: string;
@@ -29,44 +29,12 @@ export function UploadFotoAluno({
   size = "lg",
   onAtualizado,
 }: UploadFotoProps) {
-  const inputRef = React.useRef<HTMLInputElement>(null);
-  const [enviando, setEnviando] = React.useState(false);
+  const [modalAberto, setModalAberto] = React.useState(false);
   const [fotoLocal, setFotoLocal] = React.useState<string | null>(fotoAtual ?? null);
-  const toast = useToast();
 
   React.useEffect(() => {
     setFotoLocal(fotoAtual ?? null);
   }, [fotoAtual]);
-
-  const escolherFoto = () => inputRef.current?.click();
-
-  const fazerUpload = async (file: File) => {
-    setEnviando(true);
-    try {
-      const fd = new FormData();
-      fd.set("alunoId", alunoId);
-      fd.set("file", file);
-      const r = await fetch("/api/upload/foto-aluno", { method: "POST", body: fd });
-      const data = await r.json();
-      if (!r.ok) {
-        toast.error("Erro ao subir foto", data.error || "Tente de novo");
-        return;
-      }
-      setFotoLocal(data.url);
-      toast.success("Foto atualizada!", nomeAluno);
-      onAtualizado?.(data.url);
-    } catch (e) {
-      toast.error("Erro de conexão", String(e));
-    } finally {
-      setEnviando(false);
-    }
-  };
-
-  const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f) fazerUpload(f);
-    e.target.value = "";
-  };
 
   return (
     <div className="relative inline-block group">
@@ -81,20 +49,24 @@ export function UploadFotoAluno({
       </Avatar>
       <button
         type="button"
-        onClick={escolherFoto}
-        disabled={enviando}
-        title="Trocar foto"
-        className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:scale-110 transition-transform disabled:opacity-60"
+        onClick={() => setModalAberto(true)}
+        title="Tirar ou enviar foto"
+        aria-label={`Tirar ou enviar foto de ${nomeAluno}`}
+        className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:scale-110 transition-transform"
       >
-        {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+        <Camera className="h-4 w-4" />
       </button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        className="hidden"
-        onChange={onPickFile}
-      />
+      {modalAberto && (
+        <CapturarFotoModal
+          alunoId={alunoId}
+          nomeAluno={nomeAluno}
+          onClose={() => setModalAberto(false)}
+          onAtualizado={(url) => {
+            setFotoLocal(url);
+            onAtualizado?.(url);
+          }}
+        />
+      )}
     </div>
   );
 }

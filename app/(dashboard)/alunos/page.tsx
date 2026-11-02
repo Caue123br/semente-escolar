@@ -7,7 +7,6 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Select,
   SelectTrigger,
@@ -27,7 +26,7 @@ import { SortHeader } from "@/components/ui/sort-header";
 import { SkeletonTableRows } from "@/components/ui/skeleton";
 import { useSort } from "@/lib/use-sort";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { initials, formatDateBR, formatDateLocalISO } from "@/lib/utils";
+import { formatDateBR, formatDateLocalISO } from "@/lib/utils";
 import { useEntidade, type OpcoesEscrita } from "@/lib/data/store";
 import { usePerfil } from "@/lib/perfil-context";
 import { podeGerenciarAlunos } from "@/lib/access-control";
@@ -40,6 +39,8 @@ import { NovaTurmaModal } from "@/components/alunos/nova-turma-modal";
 import { GerenciarTurmasModal } from "@/components/alunos/gerenciar-turmas-modal";
 import { TrocarSalaModal } from "@/components/alunos/trocar-sala-modal";
 import { MoverAlunosEmMassa } from "@/components/alunos/mover-alunos-em-massa";
+import { CapturarFotoModal } from "@/components/alunos/capturar-foto-modal";
+import { AvatarAlunoLista } from "@/components/alunos/avatar-aluno-lista";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { filtrarAlunos, listarProfessorasTurmas, normalizarBuscaAlunos, temAlertaSaude, type OpcaoProfessora } from "@/lib/filtros-alunos";
 
@@ -63,6 +64,7 @@ export default function AlunosPage() {
   const [pagina, setPagina] = React.useState(1);
   const [fotoNovoAluno, setFotoNovoAluno] = React.useState<Aluno | null>(null);
   const [trocandoSala, setTrocandoSala] = React.useState<Aluno | null>(null);
+  const [fotoCaptura, setFotoCaptura] = React.useState<Aluno | null>(null);
   const [selecionados, setSelecionados] = React.useState<ReadonlySet<string>>(new Set());
   const [turmaInicial, setTurmaInicial] = React.useState<
     Partial<Pick<Turma, "nome" | "serie" | "turno" | "capacidade" | "cor">> | null
@@ -349,6 +351,14 @@ export default function AlunosPage() {
           onGerenciarTurmas={() => setModalGerenciarTurmasAberto(true)}
         />
       )}
+      {podeGerenciar && fotoCaptura && (
+        <CapturarFotoModal
+          alunoId={fotoCaptura.id}
+          nomeAluno={fotoCaptura.nome}
+          onClose={() => setFotoCaptura(null)}
+          onAtualizado={() => window.dispatchEvent(new CustomEvent("semente:changed:alunos"))}
+        />
+      )}
       <NovaTurmaModal
         aberto={modalTurmaAberto}
         onClose={() => setModalTurmaAberto(false)}
@@ -548,22 +558,18 @@ export default function AlunosPage() {
                           </TableCell>
                         )}
                         <TableCell>
-                          <Link
-                            href={podeGerenciar ? `/alunos/${a.id}` : `/pedagogico/${a.id}`}
-                            className="flex items-center gap-3 hover:underline"
-                          >
-                            <Avatar className="h-8 w-8">
-                              <AvatarFallback
-                                className="text-xs"
-                                style={{
-                                  backgroundColor: (turma?.cor ?? "#888") + "30",
-                                  color: turma?.cor ?? "#888",
-                                }}
-                              >
-                                {initials(a.nome)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
+                          <div className="flex items-center gap-3">
+                            <AvatarAlunoLista
+                              aluno={a}
+                              href={podeGerenciar ? `/alunos/${a.id}` : `/pedagogico/${a.id}`}
+                              cor={turma?.cor}
+                              podeGerenciar={podeGerenciar}
+                              onCapturar={() => setFotoCaptura(a)}
+                            />
+                            <Link
+                              href={podeGerenciar ? `/alunos/${a.id}` : `/pedagogico/${a.id}`}
+                              className="hover:underline"
+                            >
                               <div className="font-medium">{a.nome}</div>
                               <div className="text-xs text-muted-foreground">
                                 {a.bilingue && (
@@ -572,8 +578,8 @@ export default function AlunosPage() {
                                   </Badge>
                                 )}
                               </div>
-                            </div>
-                          </Link>
+                            </Link>
+                          </div>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {a.matricula}
