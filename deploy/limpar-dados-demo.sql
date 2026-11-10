@@ -14,9 +14,9 @@
 --   app.solicitacoes_demo — leads reais vindos do site público.
 --
 -- A ordem abaixo segue o grafo de chaves estrangeiras real do banco.
--- As duas únicas dependências RESTRICT no caminho são
--- alunos -> turmas e biblioteca_emprestimos -> biblioteca_livros;
--- ambas estão respeitadas.
+-- As dependências RESTRICT no caminho são alunos -> turmas,
+-- alunos_documentos -> alunos e biblioteca_emprestimos -> biblioteca_livros;
+-- todas estão respeitadas.
 -- ============================================================================
 
 \set ON_ERROR_STOP on
@@ -69,6 +69,7 @@ DELETE FROM app.kanban_cards;
 -- ---------------------------------------------------------------------------
 -- Nível 3 — alunos (RESTRICT em turmas: tem de sair antes das turmas)
 -- ---------------------------------------------------------------------------
+DELETE FROM app.alunos_documentos;
 DELETE FROM app.alunos;
 
 -- ---------------------------------------------------------------------------

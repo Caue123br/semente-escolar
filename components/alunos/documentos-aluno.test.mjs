@@ -160,6 +160,7 @@ test("enviar monta o FormData do contrato da API e recarrega a lista", async () 
 
   const arquivoFalso = { name: "certidao.pdf", size: 1000 };
   encontrar(arvore, (no) => no.type === "input" && no.props?.type === "file").props.onChange({ target: { files: [arquivoFalso] } });
+  encontrar(arvore, (no) => no.props?.id === "doc-descricao").props.onChange({ target: { value: "via 2026" } });
   arvore = hooks.renderizar(Aba, props);
   encontrar(arvore, (no) => no.type === "form").props.onSubmit({ preventDefault() {} });
   await aguardar();
@@ -171,6 +172,7 @@ test("enviar monta o FormData do contrato da API e recarrega a lista", async () 
   assert.equal(post.url, "/api/upload/documento-aluno");
   assert.equal(post.body.dados.get("alunoId"), "a1");
   assert.equal(post.body.dados.get("categoria"), "Certidão de nascimento");
+  assert.equal(post.body.dados.get("descricao"), "via 2026");
   assert.equal(post.body.dados.get("file"), arquivoFalso);
   assert.ok(chamadas.filter((chamada) => chamada.metodo === "GET").length >= 2);
 });

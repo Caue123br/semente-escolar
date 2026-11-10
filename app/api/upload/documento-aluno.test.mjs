@@ -60,8 +60,8 @@ function ambiente({ perfil = "diretor", escopoTurmas = null, alunos = [{ id: "a1
     // Default import no route ("import path from ...") exige o campo default.
     "node:path": { ...require("node:path"), default: require("node:path") },
     "node:fs/promises": {
-      mkdir: async (dir) => { fs.mkdir.push(dir); },
-      writeFile: async (dest) => { fs.writeFile.push(dest); },
+      mkdir: async (dir, opcoes) => { fs.mkdir.push({ dir, opcoes }); },
+      writeFile: async (dest, _dados, opcoes) => { fs.writeFile.push({ dest, opcoes }); },
       unlink: async (dest) => { fs.unlink.push(dest); },
     },
     "@/lib/access-control": { podeGerenciarAlunos: (p) => ["diretor", "coordenador"].includes(p) },
@@ -99,7 +99,11 @@ test("PDF válido é arquivado: grava em documentos/, insere a linha e audita", 
   assert.equal(item.descricao, "via 2026");
   assert.equal(item.mime, "application/pdf");
   assert.equal(env.fs.writeFile.length, 1);
-  assert.ok(env.fs.writeFile[0].includes("documentos"));
+  assert.ok(env.fs.writeFile[0].dest.includes("documentos"));
+  // wx = nunca sobrescreve; 0600/0700 = laudo e RG ilegíveis para outros usuários do host.
+  assert.equal(env.fs.writeFile[0].opcoes.flag, "wx");
+  assert.equal(env.fs.writeFile[0].opcoes.mode, 0o600);
+  assert.equal(env.fs.mkdir[0].opcoes.mode, 0o700);
   assert.equal(env.tabelas.alunos_documentos.length, 1);
   assert.equal(env.tabelas.alunos_documentos[0].enviado_por_nome, "Gestora");
   assert.equal(env.audits.length, 1);
@@ -131,7 +135,7 @@ test("INSERT falhou: o arquivo recém-gravado é removido (compensação)", asyn
   const resposta = await env.POST(requisicao());
   assert.equal(resposta.status, 500);
   assert.equal(env.fs.unlink.length, 1);
-  assert.equal(env.fs.unlink[0], env.fs.writeFile[0]);
+  assert.equal(env.fs.unlink[0], env.fs.writeFile[0].dest);
 });
 
 test("aluno inexistente devolve 404", async () => {

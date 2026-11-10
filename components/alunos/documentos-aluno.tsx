@@ -92,8 +92,8 @@ export function DocumentosAluno({ alunoId }: Props) {
       setArquivo(null);
       if (inputRef.current) inputRef.current.value = "";
       setTentativa((valor) => valor + 1);
-    } catch (error) {
-      toast.error("Erro de conexão", String(error));
+    } catch {
+      toast.error("Erro de conexão", "Verifique sua conexão e tente de novo.");
     } finally {
       setEnviando(false);
     }
@@ -113,7 +113,13 @@ export function DocumentosAluno({ alunoId }: Props) {
       setConfirmarExcluir(null);
       setTentativa((valor) => valor + 1);
     } catch (error) {
-      toast.error("Não foi possível excluir", error instanceof Error ? error.message : "Tente de novo");
+      // Mensagem do servidor já vem em PT-BR (Error que nós mesmos lançamos);
+      // falha de rede (TypeError do fetch) ganha texto fixo em português.
+      const mensagem =
+        error instanceof Error && !(error instanceof TypeError)
+          ? error.message
+          : "Verifique sua conexão e tente de novo.";
+      toast.error("Não foi possível excluir", mensagem);
     }
   };
 
@@ -208,7 +214,7 @@ export function DocumentosAluno({ alunoId }: Props) {
                   <div className="text-sm font-medium">{documento.categoria}</div>
                   <div className="truncate text-xs text-muted-foreground">
                     {documento.descricao ? `${documento.descricao} · ` : ""}
-                    {formatarTamanho(documento.tamanhoBytes)} · {formatDateBR(documento.criadoEm.slice(0, 10))}
+                    {formatarTamanho(documento.tamanhoBytes)} · {formatDateBR(documento.criadoEm)}
                     {documento.enviadoPorNome ? ` · por ${documento.enviadoPorNome}` : ""}
                   </div>
                 </div>

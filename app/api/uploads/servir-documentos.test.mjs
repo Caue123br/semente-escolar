@@ -32,7 +32,12 @@ class RespostaFalsa {
 }
 const next = { NextResponse: RespostaFalsa };
 
-function ambiente({ documentos = [] } = {}) {
+function ambiente({
+  documentos = [],
+  usuario = { id: "u1", perfil: "diretor" },
+  podeModulo = () => true,
+  escopo = { restrito: false, turmaIds: null },
+} = {}) {
   const tabelas = {
     alunos: [{ id: "a1", turma_id: "t1" }],
     alunos_documentos: documentos,
@@ -57,12 +62,12 @@ function ambiente({ documentos = [] } = {}) {
     "next/server": next,
     "node:path": { ...require("node:path"), default: require("node:path") },
     "node:fs/promises": { readFile: async () => Buffer.from("conteudo") },
-    "@/lib/access-control": { podeAcessarModulo: () => true },
+    "@/lib/access-control": { podeAcessarModulo: podeModulo },
     "@/lib/db/postgres": { getDatabase: () => db },
-    "@/lib/db/auth": { getUsuarioLogado: async () => ({ id: "u1", perfil: "diretor" }) },
+    "@/lib/db/auth": { getUsuarioLogado: async () => usuario },
     "@/lib/db/professor-scope": {
-      resolverEscopoProfessor: async () => ({ restrito: false, turmaIds: null }),
-      professorPodeAcessarTurma: () => true,
+      resolverEscopoProfessor: async () => escopo,
+      professorPodeAcessarTurma: (esc, turmaId) => !esc.restrito || esc.turmaIds.includes(turmaId),
     },
   });
   return rota.GET;
@@ -90,6 +95,18 @@ test("documento PDF com 5 segmentos é servido inline com nome legível da categ
   assert.ok(disposicao.startsWith("inline;"));
   assert.ok(disposicao.includes("Certidao de nascimento.pdf"));
   assert.ok(disposicao.includes("filename*=UTF-8''"));
+});
+
+test("documento exige sessão, módulo alunos e escopo: 401 sem login, 403 sem módulo, 404 fora do escopo", async () => {
+  const caminho = ["default", "alunos", "a1", "documentos", "d1.pdf"];
+  assert.equal((await chamada(ambiente({ usuario: null }), caminho)).status, 401);
+  assert.equal((await chamada(ambiente({ podeModulo: () => false }), caminho)).status, 403);
+  // Professora restrita à turma t9 não enxerga documentos do aluno da t1.
+  const foraDoEscopo = ambiente({
+    usuario: { id: "p1", perfil: "professor" },
+    escopo: { restrito: true, turmaIds: ["t9"] },
+  });
+  assert.equal((await chamada(foraDoEscopo, caminho)).status, 404);
 });
 
 test("5 segmentos sem a pasta documentos, PDF em caminho de foto e traversal continuam 404", async () => {

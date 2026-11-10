@@ -28,10 +28,11 @@ const docs = carregar("lib/documentos-aluno.ts");
 
 function ambiente({ perfil = "diretor", escopoTurmas = null } = {}) {
   const tabelas = {
-    alunos: [{ id: "a1", turma_id: "t1" }],
+    alunos: [{ id: "a1", turma_id: "t1" }, { id: "a2", turma_id: "t2" }],
     alunos_documentos: [
       { id: "d1", aluno_id: "a1", categoria: "RG", descricao: null, arquivo_url: "/api/uploads/default/alunos/a1/documentos/d1.pdf", mime: "application/pdf", tamanho_bytes: 100, enviado_por_nome: "Gestora", criado_em: "2026-11-01" },
       { id: "d2", aluno_id: "a1", categoria: "CPF", descricao: null, arquivo_url: "/api/uploads/default/alunos/a1/documentos/d2.png", mime: "image/png", tamanho_bytes: 200, enviado_por_nome: "Gestora", criado_em: "2026-11-09" },
+      { id: "d3", aluno_id: "a2", categoria: "Contrato", descricao: null, arquivo_url: "/api/uploads/default/alunos/a2/documentos/d3.pdf", mime: "application/pdf", tamanho_bytes: 300, enviado_por_nome: "Gestora", criado_em: "2026-11-05" },
     ],
   };
   const fs = { unlink: [] };
@@ -108,7 +109,7 @@ test("DELETE remove a linha, apaga o arquivo físico e audita", async () => {
   const env = ambiente();
   const resposta = await env.DELETE(req(), params({ id: "a1", docId: "d1" }));
   assert.equal(resposta.status, 200);
-  assert.deepEqual(env.tabelas.alunos_documentos.map((documento) => documento.id), ["d2"]);
+  assert.deepEqual(env.tabelas.alunos_documentos.map((documento) => documento.id), ["d2", "d3"]);
   assert.equal(env.fs.unlink.length, 1);
   assert.ok(env.fs.unlink[0].endsWith("d1.pdf"));
   assert.ok(env.fs.unlink[0].includes("documentos"));
@@ -120,5 +121,16 @@ test("DELETE de documento inexistente devolve 404 sem apagar nada", async () => 
   const env = ambiente();
   assert.equal((await env.DELETE(req(), params({ id: "a1", docId: "dX" }))).status, 404);
   assert.equal(env.fs.unlink.length, 0);
-  assert.equal(env.tabelas.alunos_documentos.length, 2);
+  assert.equal(env.tabelas.alunos_documentos.length, 3);
+});
+
+test("documento de um aluno não sai pela URL de outro (vínculo aluno↔documento no DELETE e no GET)", async () => {
+  // d1 é do a1: tentar excluí-lo via /api/alunos/a2/documentos/d1 tem de dar 404.
+  const env = ambiente();
+  assert.equal((await env.DELETE(req(), params({ id: "a2", docId: "d1" }))).status, 404);
+  assert.equal(env.tabelas.alunos_documentos.length, 3);
+  assert.equal(env.fs.unlink.length, 0);
+  // E a listagem do a2 só traz o documento dele.
+  const { items } = await (await env.GET(req(), params({ id: "a2" }))).json();
+  assert.deepEqual(items.map((item) => item.id), ["d3"]);
 });
