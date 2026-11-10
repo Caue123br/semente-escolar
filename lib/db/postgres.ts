@@ -48,6 +48,7 @@ const TABLES = {
   turmas: { schema: "app", tenant: true },
   alunos: { schema: "app", tenant: true },
   responsaveis: { schema: "app", tenant: true },
+  alunos_documentos: { schema: "app", tenant: true },
   mensalidades: { schema: "app", tenant: true },
   cobrancas: { schema: "app", tenant: true },
   despesas: { schema: "app", tenant: true },

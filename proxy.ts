@@ -92,6 +92,7 @@ const MODULOS_API: Array<[string, string]> = [
   ["/api/conversas", "whatsapp"],
   ["/api/avaliacoes", "pedagogico"],
   ["/api/upload/foto-aluno", "alunos"],
+  ["/api/upload/documento-aluno", "alunos"],
   ["/api/uploads", "alunos"],
   ["/api/transporte", "transporte"],
   ["/api/patrimonio", "patrimonio"],
@@ -124,6 +125,7 @@ function podeAcessarApi(
       "/api/alunos",
       "/api/turmas",
       "/api/upload/foto-aluno",
+      "/api/upload/documento-aluno",
       // Cadastro de bebê é cadastro de criança, como o de aluno; os registros
       // do dia (/api/bercario-registros) seguem abertos a quem cuida da turma.
       "/api/bercario-bebes",

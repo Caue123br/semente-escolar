@@ -18,6 +18,11 @@ const CONTENT_TYPES: Record<string, string> = {
   ".png": "image/png",
   ".webp": "image/webp",
 };
+// PDF só no subcaminho documentos/ — foto de aluno continua imagem pura.
+const CONTENT_TYPES_DOCUMENTO: Record<string, string> = {
+  ...CONTENT_TYPES,
+  ".pdf": "application/pdf",
+};
 
 function uploadsRoot(): string {
   const configured = process.env.UPLOADS_DIR;
@@ -43,8 +48,10 @@ export async function GET(
 
   const { arquivo } = await params;
   const escolaId = process.env.SCHOOL_ID ?? "default";
+  const ehFoto = arquivo.length === 4;
+  const ehDocumento = arquivo.length === 5 && arquivo[3] === "documentos";
   if (
-    arquivo.length !== 4 ||
+    (!ehFoto && !ehDocumento) ||
     arquivo[0] !== escolaId ||
     arquivo[1] !== "alunos" ||
     arquivo.some((segmento) => !SEGMENTO.test(segmento))
@@ -71,8 +78,33 @@ export async function GET(
     return new NextResponse(null, { status: 404 });
   }
 
-  const contentType = CONTENT_TYPES[path.extname(absolutePath).toLowerCase()];
+  const contentType = (ehDocumento ? CONTENT_TYPES_DOCUMENTO : CONTENT_TYPES)[
+    path.extname(absolutePath).toLowerCase()
+  ];
   if (!contentType) return new NextResponse(null, { status: 404 });
+
+  // Documento abre inline com o nome da categoria (o uuid no disco é ilegível).
+  let contentDisposition: string | null = null;
+  if (ehDocumento) {
+    const urlRelativa = `/api/uploads/${arquivo.map(encodeURIComponent).join("/")}`;
+    const { data: documento } = await getDatabase()
+      .from("alunos_documentos")
+      .select("categoria")
+      .eq("arquivo_url", urlRelativa)
+      .maybeSingle();
+    const extensao = path.extname(absolutePath).toLowerCase();
+    const rotulo =
+      typeof documento?.categoria === "string" && documento.categoria.trim()
+        ? documento.categoria.trim()
+        : "documento";
+    const ascii =
+      rotulo
+        .normalize("NFD")
+        .replace(/[̀-ͯ]/g, "")
+        .replace(/[^a-zA-Z0-9 _.-]/g, "")
+        .trim() || "documento";
+    contentDisposition = `inline; filename="${ascii}${extensao}"; filename*=UTF-8''${encodeURIComponent(`${rotulo}${extensao}`)}`;
+  }
 
   try {
     const file = await readFile(/* turbopackIgnore: true */ absolutePath);
@@ -81,6 +113,7 @@ export async function GET(
         "content-type": contentType,
         "cache-control": "private, max-age=300, no-store",
         "x-content-type-options": "nosniff",
+        ...(contentDisposition ? { "content-disposition": contentDisposition } : {}),
       },
     });
   } catch {

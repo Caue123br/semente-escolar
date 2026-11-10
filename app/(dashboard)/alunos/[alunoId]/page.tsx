@@ -23,6 +23,7 @@ import { usePerfil } from "@/lib/perfil-context";
 import { podeGerenciarAlunos } from "@/lib/access-control";
 import { UploadFotoAluno } from "@/components/alunos/upload-foto";
 import { FichaFinanceiraAluno } from "@/components/financeiro/ficha-financeira-aluno";
+import { DocumentosAluno } from "@/components/alunos/documentos-aluno";
 import { EditarAlunoModal } from "@/components/alunos/editar-aluno-modal";
 import { formatDateBR, formatBRL } from "@/lib/utils";
 import { formatarPeriodoMatricula } from "@/lib/periodos-matricula";
@@ -296,21 +297,7 @@ export default function AlunoDetalhePage() {
         </TabsContent>
 
         <TabsContent value="documentos">
-          <Card>
-            <CardHeader>
-              <CardTitle>Documentos</CardTitle>
-              <CardDescription>Cópias digitalizadas e contratos do aluno</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-lg border border-dashed p-8 text-center">
-                <FileText className="mx-auto h-8 w-8 text-muted-foreground" />
-                <div className="mt-3 text-sm font-medium">Nenhum documento anexado</div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Esta área não exibe arquivos fictícios. O upload de documentos será mostrado aqui quando estiver configurado.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <DocumentosAluno alunoId={aluno.id} />
         </TabsContent>
 
         <TabsContent value="financeiro" className="space-y-6">
